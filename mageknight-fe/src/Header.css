@@ -1,0 +1,33 @@
+header {
+  padding: 10px;
+}
+
+.menu {
+  margin-bottom: 10px;
+}
+
+.menu ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: 10px;
+}
+
+.menu li {
+  display: inline;
+}
+
+.menu button {
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.player-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.player-info p {
+  margin: 0;
+}

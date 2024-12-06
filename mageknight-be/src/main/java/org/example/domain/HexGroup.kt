@@ -1,51 +1,81 @@
-import org.example.domain.Tile
-import org.example.domain.Monster
-import org.example.domain.Site
-import org.example.domain.Terrain
+import org.example.domain.*
+import org.yaml.snakeyaml.util.Tuple
 
 class HexGroup(
-    val centerTile: Tile,
-    val surroundingTiles: List<Tile>
+    val hexes: List<Tile>
 ) {
-    var isDiscovered: Boolean = false
-        private set
-
-    fun discover(searchPoints: Int): Boolean {
-        if (isDiscovered) {
-            println("HexGroup is already discovered!")
-            return false
-        }
-
-        return if (searchPoints >= 2) {
-            isDiscovered = true
-            println("HexGroup discovered! Center: (${centerTile.x}, ${centerTile.y}, ${centerTile.z})")
-            true
-        } else {
-            println("Not enough search points to discover this HexGroup!")
-            false
-        }
-    }
 
     companion object {
-        fun create(center: Tile): HexGroup {
-            val directions = listOf(
-                Triple(1, -1, 0), Triple(1, 0, -1),
-                Triple(0, 1, -1), Triple(-1, 1, 0),
-                Triple(-1, 0, 1), Triple(0, -1, 1)
-            )
+                fun copyWithOffset(
+            hexGroup: HexGroup,
+            middleTileCoords: HexPosition
+        ): HexGroup {
+            val q = middleTileCoords.q
+            val r = middleTileCoords.r
+            val s = middleTileCoords.s
 
-            val surroundingHexes = directions.map { (dx, dy, dz) ->
-                val tile = Tile(center.x + dx, center.y + dy, center.z + dz, randomTerrain(), mutableListOf(), Site("Site", "Description"))
-                tile.addMonster(randomMonster())
-                tile.site = randomSite()
-                tile
+            val directions = listOf(
+                Triple(-1, 0, 1), Triple(0, -1, 1),
+                Triple(1, -1, 0), Triple(0, 0, 0),Triple(-1, 1, 0),
+                Triple(1, 0, -1), Triple(0, 1, -1),
+            )
+            val hexes = mutableListOf<Tile>()
+            for (i in 0 until hexGroup.hexes.size) {
+                val newTile = Tile(
+                    q + directions[i].first,
+                    r + directions[i].second,
+                    s + directions[i].third,
+                    hexGroup.hexes[i].terrain,
+                    mutableListOf(),
+                    hexGroup.hexes[i].site
+                )
+                hexes.add(newTile)
             }
 
-            return HexGroup(center, surroundingHexes)
+            return HexGroup(hexes)
         }
 
-        private fun randomTerrain(): Terrain {
-            return Terrain.entries.toTypedArray().random()
+        fun createTileGroup(
+            tiles: List<Tuple<Terrain, SiteType>>,
+            middleTileCoords: Triple<Int, Int, Int> = Triple(0, 0, 0)
+        ): HexGroup {
+            val q = middleTileCoords.first
+            val r = middleTileCoords.second
+            val s = middleTileCoords.third
+
+            val directions = listOf(
+                Triple(0, -1, 1), Triple(1, -1, 0),
+                Triple(-1, 0, 1), Triple(0, 0, 0), Triple(1, 0, -1),
+                Triple(-1, 1, 0), Triple(0, 1, -1),
+            )
+            val hexes = mutableListOf<Tile>()
+            for (i in tiles.indices) {
+                val newTile = Tile(
+                    q + directions[i].first,
+                    r + directions[i].second,
+                    s + directions[i].third,
+                    tiles[i]._1(),
+                    mutableListOf(),
+                    tiles[i]._2()
+                )
+                hexes.add(newTile)
+            }
+
+            return HexGroup(hexes)
+        }
+
+        fun createStartingTile(): HexGroup {
+            return createTileGroup(
+                listOf(
+                    Tuple(Terrain.PLAINS, null),
+                    Tuple(Terrain.FOREST, null),
+                    Tuple(Terrain.WATER, null),
+                    Tuple(Terrain.PLAINS, SiteType.PORTAL),
+                    Tuple(Terrain.PLAINS, null),
+                    Tuple(Terrain.WATER, null),
+                    Tuple(Terrain.PLAINS, null)
+                )
+            )
         }
 
         private fun randomMonster(): Monster {
@@ -55,15 +85,6 @@ class HexGroup(
                 Monster("Dragon", 10)
             )
             return monsters.random()
-        }
-
-        private fun randomSite(): Site {
-            val sites = listOf(
-                Site("Ancient Ruins", "Explore for treasures and artifacts."),
-                Site("Mystic Spring", "Restore health and mana."),
-                Site("Abandoned Village", "Discover resources and stories.")
-            )
-            return sites.random()
         }
     }
 }

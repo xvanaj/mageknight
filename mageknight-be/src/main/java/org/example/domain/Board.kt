@@ -1,8 +1,11 @@
 package org.example.domain
 
-data class Monster(val name: String, val power: Int)
+import HexGroup
+import HexGroup.Companion.copyWithOffset
+import HexGroup.Companion.createStartingTile
+import com.fasterxml.jackson.annotation.JsonProperty
 
-data class Site(val name: String, val description: String)
+data class Monster(val name: String, val power: Int)
 
 enum class SiteType {
     CITY,
@@ -18,16 +21,19 @@ enum class SiteType {
     MAZE,
     SPAWNING_GROUNDS,
     ANCIENT_RUINS,
-    DRACONUM_LAIR
+    DRACONUM_LAIR,
+    MAGICAL_GLADE,
+    PORTAL,
+    ORC,
 }
 
 data class Tile(
-    val x: Int,
-    val y: Int,
-    val z: Int,
+    val q: Int,
+    val r: Int,
+    val s: Int,
     val terrain: Terrain,
     val monsters: MutableList<Monster>,
-    var site: Site
+    var site: SiteType? = null
 ) {
     val movementCost: Int = terrain.movementCost
 
@@ -36,8 +42,8 @@ data class Tile(
     }
 
     override fun toString(): String {
-        return "Hex(x=$x, y=$y, z=$z, terrain=$terrain, movementCost=$movementCost, " +
-                "monsters=${monsters.map { it.name }}, site=${site.name}}})"
+        return "Hex(x=$q, y=$r, z=$s, terrain=$terrain, movementCost=$movementCost, " +
+                "monsters=${monsters.map { it.name }}, site=${site}}})"
     }
 }
 
@@ -50,13 +56,16 @@ enum class Terrain(val movementCost: Int, val nigthMovementCost: Int) {
     DESERT(5, 3),
     SWAMP(5, 5),
     WATER(999, 999),
-    ROCKS(999, 999)
+    LAKE(999, 999),
+    ROCKS(999, 999),
 }
 
 class Board {
 
     private val playersCount: Int = 1
+    @JsonProperty("hexes")
     private val hexes: MutableMap<String, Tile> = mutableMapOf()
+    @JsonProperty("manaDices")
     private val manaDices: MutableList<MKColor> = mutableListOf(MKColor.GREEN, MKColor.RED, MKColor.WHITE, MKColor.BLUE)
 
     private var advancedActionDeck: MutableList<DeedCard>
@@ -64,14 +73,20 @@ class Board {
     private var artifactsDeck: MutableList<DeedCard>
     private var unitsDeck: MutableList<UnitCard>
     private var advancedUnitsDeck: MutableList<UnitCard>
+    private val baseTilesDeck: MutableList<HexGroup>
+    @JsonProperty("players")
     private var players: MutableList<Player>
 
+    @JsonProperty("advancedActionOffer")
     private val advancedActionOffer: MutableList<DeedCard>
+    @JsonProperty("spellOffer")
     private val spellOffer: MutableList<DeedCard>
+    @JsonProperty("unitOffer")
     private val unitsOffer: MutableList<UnitCard>
 
+    private val gameData = GameData
+
     init {
-        generateBoard()
         players = mutableListOf(Player())
         //create and shuffle decks
         spellDeck = GameData.createAllSpellCardsShuffled().toMutableList()
@@ -79,6 +94,9 @@ class Board {
         unitsDeck = GameData.createUnitCardsShuffled().toMutableList()
         advancedUnitsDeck = GameData.createUnitCardsShuffled().toMutableList()
         artifactsDeck = GameData.createArtifactCardsShuffled().toMutableList()
+        baseTilesDeck = GameData.createBaseTilesShuffled().toMutableList()
+        // create board
+        generateBoard()
 
         //create offers
         val offerSize = playersCount + 2
@@ -89,19 +107,48 @@ class Board {
         unitsOffer = unitsDeck.take(offerSize).toMutableList()
         spellDeck.subList(0, offerSize).clear()
 
+        //draw starting hand
+        players.forEach { player ->
+            player.basicCards.addAll(GameData.createBasicActionCards())
+            player.hand.addAll(player.basicCards.take(5))
+            player.basicCards.subList(0, 5).clear()
+        }
 
     }
 
 
-    // Generate a 5x5 board with random terrain
+    // generate tilegroup with portal and 3 tilegroups around it
     private fun generateBoard() {
 
+        val hexGroup = createStartingTile()
+        hexes.putAll(hexGroup.hexes.associateBy { "${it.q},${it.r},${it.s}" })
+
+        val topLeft = baseTilesDeck.take(1)[0]
+        baseTilesDeck.subList(0, 1).clear()
+        val topLeftWithOffset = copyWithOffset(topLeft, HexPosition(-1, -2, 3))
+        hexes.putAll(topLeftWithOffset.hexes.associateBy { "${it.q},${it.r},${it.s}" })
+
+        val top = baseTilesDeck.take(1)[0]
+        baseTilesDeck.subList(0, 1).clear()
+        val topWithOffset = copyWithOffset(top, HexPosition(2, -3, 0))
+        hexes.putAll(topWithOffset.hexes.associateBy { "${it.q},${it.r},${it.s}" })
+
+        val topRight = baseTilesDeck.take(1)[0]
+        baseTilesDeck.subList(0, 1).clear()
+        val topRightWithOffset = copyWithOffset(topRight, HexPosition(3, -2, -2))
+        hexes.putAll(topRightWithOffset.hexes.associateBy { "${it.q},${it.r},${it.s}" })
+    }
+
+    private fun generateRandomBoard() {
         for (x in -2..2) {
             for (y in -2..2) {
                 val z = -x - y
                 if (x + y + z == 0) { // Valid cube coordinate
                     val terrain = randomTerrain()
-                    hexes[coordinateKey(x, y, z)] = Tile(x, y, z, terrain, mutableListOf(), Site("Site", "Description"))
+                    hexes[coordinateKey(x, y, z)] = Tile(
+                        x, y, z, terrain, mutableListOf(), SiteType.entries.toTypedArray()
+                            .random()
+                    )
                 }
             }
         }
@@ -127,13 +174,13 @@ class Board {
         )
 
         return directions.mapNotNull { (dx, dy, dz) ->
-            getHex(tile.x + dx, tile.y + dy, tile.z + dz)
+            getHex(tile.q + dx, tile.r + dy, tile.s + dz)
         }
     }
 
     fun printBoard2() {
         for (hex in hexes.values) {
-            println("Hex(${hex.x}, ${hex.y}, ${hex.z}) -> Terrain: ${hex.terrain}, Cost: ${hex.movementCost}")
+            println("Hex(${hex.q}, ${hex.r}, ${hex.s}) -> Terrain: ${hex.terrain}, Cost: ${hex.movementCost}")
         }
     }
 
@@ -166,19 +213,19 @@ class Board {
         for (x in -radius..radius) {
             for (y in maxOf(-radius, -x - radius)..minOf(radius, -x + radius)) {
                 val z = -x - y
-                tiles.add(Tile(x, y, z, randomTerrain(), mutableListOf(), Site("Site", "Description")))
+                tiles.add(Tile(x, y, z, randomTerrain(), mutableListOf(), SiteType.values().random()))
             }
         }
 
         // Display the hex grid
         val grid = buildString {
-            val minY = tiles.minOf { it.y }
-            val maxY = tiles.maxOf { it.y }
+            val minY = tiles.minOf { it.r }
+            val maxY = tiles.maxOf { it.r }
 
             for (y in minY..maxY) {
                 append(" ".repeat(radius - y)) // Indentation for hex grid alignment
                 for (x in -radius..radius) {
-                    val hex = tiles.find { it.x == x && it.y == y }
+                    val hex = tiles.find { it.q == x && it.r == y }
                     if (hex != null) {
                         append(" ${terrainSymbol(hex.terrain)} ")
                     } else {
@@ -202,6 +249,7 @@ class Board {
             Terrain.HILLS -> 'H'
             Terrain.SWAMP -> 'S'
             Terrain.ROCKS -> 'R'
+            Terrain.LAKE -> 'L'
         }
     }
 
@@ -230,7 +278,7 @@ fun main() {
     if (startHex != null) {
         println("Start Hex: $startHex")
         val neighbors = board.getNeighbors(startHex)
-        println("Neighbors: ${neighbors.joinToString { "(${it.x}, ${it.y}, ${it.z}) - ${it.terrain}" }}")
+        println("Neighbors: ${neighbors.joinToString { "(${it.q}, ${it.r}, ${it.s}) - ${it.terrain}" }}")
     } else {
         println("Start Hex not found!")
     }
