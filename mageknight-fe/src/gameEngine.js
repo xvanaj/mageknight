@@ -121,7 +121,10 @@ const HEXES = [
   [3, -1, 'plains', null], [3, -2, 'wasteland', 'city', 'city', 'red'], [3, -3, 'desert', null], [2, -3, 'forest', 'mine'],
   [-3, 0, 'plains', null], [-3, 1, 'hills', 'tomb', 'tomb'], [-3, 2, 'forest', 'monster-den', 'den'],
   [-3, 3, 'swamp', 'spawning-grounds', 'spawn'], [-2, 3, 'plains', 'city', 'city', 'blue'],
-  [-1, 3, 'hills', 'city', 'city', 'white'], [0, 3, 'forest', 'city', 'city', 'green'],
+  [-1, 3, 'hills', 'city', 'city', 'white'], [0, 3, 'forest', 'city', 'city', 'green'],[1,3,'desert','draconum','highDragon'],
+  [4,-1,'plains','village'],[4,-2,'forest','glade'],[4,-3,'hills','keep','guards'],[4,-4,'desert','ruins','golem'],[3,-4,'wasteland','rampaging','prowlers'],[2,-4,'lake',null],
+  [1,-4,'forest','monster-den','den'],[0,-4,'desert','draconum','dragon'],[-1,-3,'hills','keep','guards'],[-2,-2,'plains','village'],[-3,-1,'wasteland','dungeon','golem'],[-4,0,'forest','mage-tower','mage'],
+  [-4,1,'plains','monastery'],[-4,2,'swamp','ruins','golem'],[-4,3,'forest','glade'],[-4,4,'desert','draconum','iceDragon'],[-3,4,'hills','keep','guards'],[-2,4,'plains','mine'],
 ].map(([q, r, terrain, site, enemy, cityColor]) => ({ q, r, s: -q-r, terrain, site, cityColor, mineColor: site==='mine' ? COLORS[(Math.abs(q)+Math.abs(r))%4] : undefined, enemy: enemy ? { ...ENEMIES[enemy], uid: `${q}:${r}:${enemy}` } : null, conquered: false, burned:false, used: false }));
 
 const ADVANCED_CARDS = [
@@ -148,7 +151,7 @@ export const CONTENT_COUNTS={advancedActions:ADVANCED_CARDS.length,spells:SPELL_
 const clone = value => JSON.parse(JSON.stringify(value));
 const migrateState=state=>{
   const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
-  state.decks=state.decks||{};const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat)state.combat.damageUnits=state.combat.damageUnits||[];state.version=5;return state;
+  state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat)state.combat.damageUnits=state.combat.damageUnits||[];state.version=5;return state;
 };
 const enemyGroup=members=>{const list=members.map(clone);return {id:list.map(enemy=>enemy.id).join('+'),uid:list.map(enemy=>enemy.uid||enemy.id).join('|'),name:list.length>1?`${list.length} defenders`:list[0].name,armor:list.reduce((sum,enemy)=>sum+enemy.armor,0),attack:list.reduce((sum,enemy)=>sum+enemy.attack,0),fame:list.reduce((sum,enemy)=>sum+enemy.fame,0),traits:[...new Set(list.flatMap(enemy=>enemy.traits||[]))],members:list};};
 const distance = (a, b) => (Math.abs(a.q-b.q) + Math.abs(a.r-b.r) + Math.abs((-a.q-a.r)-(-b.q-b.r))) / 2;
@@ -179,7 +182,7 @@ const prepareMap=exploration=>clone(HEXES).map(hex=>{
 
 const createEnemyDecks=seed=>Object.fromEntries(Object.entries(ENEMY_POOLS).map(([category,ids],index)=>[category,shuffled(ids.flatMap((id,copy)=>[{...clone(ENEMIES[id]),uid:`${category}-${id}-${copy}`}]),seed+101+index*19)]));
 function revealEnemyTokens(state,tileId){state.map.filter(hex=>hex.tileId===tileId&&hex.enemyCategory&&hex.site!=='spawning-grounds').forEach(hex=>{const deck=state.enemyDecks[hex.enemyCategory];if(deck?.length){const token=deck.shift();hex.enemy={...token,uid:`${hex.q}:${hex.r}:${token.uid}`};hex.enemies=[clone(hex.enemy)];}});}
-function setupRuins(state){const ruins=state.map.find(hex=>hex.site==='ruins');if(!ruins)return;const roll=state.seed%3;if(roll===0){ruins.enemy=null;ruins.ruinsToken={type:'altar',color:COLORS[state.seed%COLORS.length],fame:7};}else if(roll===1)ruins.ruinsToken={type:'enemies',reward:'artifact'};else ruins.ruinsToken={type:'enemies',reward:'crystals',count:4};}
+function setupRuins(state){state.map.filter(hex=>hex.site==='ruins').forEach((ruins,index)=>{const roll=(state.seed+index)%3;if(roll===0){ruins.enemy=null;ruins.ruinsToken={type:'altar',color:COLORS[(state.seed+index)%COLORS.length],fame:7};}else if(roll===1)ruins.ruinsToken={type:'enemies',reward:'artifact'};else ruins.ruinsToken={type:'enemies',reward:'crystals',count:4};});}
 
 const makePlayer=(seed,character='tovak',name)=>{
   const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
@@ -195,7 +198,7 @@ export function createGame(seed = 20260901, options = {}) {
   const state = {
     version:5, seed, scenario: 'Solo Conquest', status: 'playing', round: 1, maxRounds:6, time: 'day', turn: 1, phase: options.tactics ? 'tactic' : 'action', tacticsEnabled:Boolean(options.tactics), tactic:null,
     map:prepareMap(Boolean(options.exploration)), tileDeck:shuffled(MAP_TILES.map(tile=>tile.id),seed+23), exploredTiles:[], enemyDecks:createEnemyDecks(seed),explorationEnabled:Boolean(options.exploration), source,
-    offer: { units:regularUnits.splice(0,3),advanced:advancedPool.splice(0,3),spells:spellPool.splice(0,3) },
+    offer: { units:regularUnits.splice(0,3),advanced:advancedPool.splice(0,3),spells:spellPool.splice(0,3),monastery:[] },
     decks: { artifacts:shuffled(clone(ARTIFACT_CARDS),seed+31),advanced:advancedPool,spells:spellPool,regularUnits,eliteUnits },
     player:makePlayer(seed,character),
     skillDeck:shuffled(clone(profile.skills||TOVAK_SKILLS),seed+71), skillChoices:[], commonSkills:[],
@@ -203,6 +206,7 @@ export function createGame(seed = 20260901, options = {}) {
     scoring:null,pvp:null,cooperativeAssault:null,scenarioEndTurnsRemaining:null,
   };
   setupRuins(state);
+  if(!options.exploration&&state.map.some(hex=>hex.site==='monastery'&&!hex.burned)&&state.decks.advanced.length)state.offer.monastery.push(state.decks.advanced.shift());
   log(state, 'Solo Conquest begins. It is Day. Your first hand is ready.');
   return state;
 }
@@ -339,6 +343,7 @@ export function reduceGame(input, action) {
       const skill=state.skillChoices.find(s=>s.id===action.id); if(!skill)return fail(state,'That Skill is not currently offered.');
       state.player.skills.push({...skill,used:false}); state.commonSkills.push(...state.skillChoices.filter(s=>s.id!==action.id)); state.skillChoices.splice(0);
       const advanced=state.offer.advanced.shift(); if(advanced)state.player.deck.unshift(cardWithUid(advanced,state));
+      if(state.decks.advanced.length)state.offer.advanced.push(state.decks.advanced.shift());
       log(state,`Learned ${skill.name}${advanced?` and gained ${advanced.name}`:''}.`); return state;
     }
     case 'USE_SKILL': return activateSkill(state,action);
@@ -430,6 +435,7 @@ export function reduceGame(input, action) {
     }
     case 'BURN_MONASTERY': {
       const hex=currentHex(state); if(state.phase!=='action'||hex?.site!=='monastery'||hex.burned)return fail(state,'You must be at an unburned monastery.');
+      const monasteryCard=state.offer.monastery?.shift();if(monasteryCard)state.decks.advanced.push(monasteryCard);
       state.player.reputation=Math.max(-7,state.player.reputation-3); hex.enemy={...clone(ENEMIES.mage),id:'monastery-defender',name:'Monastery Defender',uid:`burn-${state.turn}`};
       state.phase='combat-ranged';state.combat={q:hex.q,r:hex.r,origin:{q:hex.q,r:hex.r},kind:'burn',enemy:clone(hex.enemy),blocked:false,woundsTaken:0};log(state,'You attempt to burn the monastery: Reputation -3.');return state;
     }
@@ -594,7 +600,7 @@ function claimReward(state,action){
     colors.forEach(c=>{if(state.player.crystals[c]<3)state.player.crystals[c]++;});
   } else {
     const offer=reward.type==='spell'?state.offer.spells:state.decks.artifacts;const card=offer.find(c=>c.id===action.id)||offer[0];if(!card)return fail(state,`No ${reward.type} is available.`);
-    state.player.deck.unshift(cardWithUid(card,state));if(reward.type==='spell')state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);else state.decks.artifacts=state.decks.artifacts.filter(c=>c.id!==card.id);
+    state.player.deck.unshift(cardWithUid(card,state));if(reward.type==='spell'){state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);if(state.decks.spells.length)state.offer.spells.push(state.decks.spells.shift());}else state.decks.artifacts=state.decks.artifacts.filter(c=>c.id!==card.id);
   }
   state.pendingRewards.shift();log(state,`Claimed ${reward.type} reward from ${reward.source}.`);return state;
 }
@@ -609,8 +615,8 @@ function interact(state, action) {
   if(action.kind==='recruit') { const unit=state.offer.units.find(u=>u.id===action.id); if(!unit)return fail(state,'That unit is not in the offer.');const allowed=(city&&hex.cityColor==='white')||unit.sites.includes(hex.site)||(city&&unit.sites.includes('city'));if(!allowed)return fail(state,`${unit.name} cannot be recruited here.`); if(state.player.units.length>=state.player.command)return fail(state,'All command slots are full.'); const modifier=reputationInfluence(state.player.reputation); const cost=Math.max(0,unit.cost-modifier); if(state.points.influence<cost)return fail(state,`You need ${cost} Influence after reputation.`); state.points.influence-=cost; state.player.units.push({...unit,spent:false,wounded:false,woundCount:0}); state.offer.units=state.offer.units.filter(u=>u.id!==unit.id); log(state,`Recruited ${unit.name}.`); return state; }
   if(action.kind==='plunder') { if(hex.site!=='village')return fail(state,'Only villages may be plundered.'); state.player.reputation=Math.max(-7,state.player.reputation-1); draw(state,2); log(state,'Plundered the village: drew two cards and lost 1 Reputation.'); return endTurn(state); }
   if(action.kind==='altar'){if(hex.site!=='ruins'||hex.ruinsToken?.type!=='altar'||hex.used)return fail(state,'There is no unused altar here.');if(!spendMana(state,hex.ruinsToken.color))return fail(state,`The altar requires ${hex.ruinsToken.color} mana.`);gainFame(state,hex.ruinsToken.fame);hex.used=true;log(state,`The ${hex.ruinsToken.color} altar granted ${hex.ruinsToken.fame} Fame.`);return state;}
-  if(action.kind==='learn-advanced') {if(!(hex.site==='monastery'||(city&&hex.cityColor==='green')))return fail(state,'Advanced Actions are not taught here.');if(state.points.influence<6)return fail(state,'You need 6 Influence.');const card=state.offer.advanced.find(c=>c.id===action.id)||state.offer.advanced[0];if(!card)return fail(state,'No Advanced Action is available.');state.points.influence-=6;state.player.deck.unshift(cardWithUid(card,state));state.offer.advanced=state.offer.advanced.filter(c=>c.id!==card.id);log(state,`Learned ${card.name}.`);return state;}
-  if(action.kind==='learn-spell') {if(!(hex.site==='mage-tower'||(city&&hex.cityColor==='blue')))return fail(state,'Spells are not taught here.');const card=state.offer.spells.find(c=>c.id===action.id);if(!card)return fail(state,'That Spell is not available.');if(state.points.influence<7)return fail(state,'You need 7 Influence.');if(!spendMana(state,card.color))return fail(state,`You also need ${card.color} mana.`);state.points.influence-=7;state.player.deck.unshift(cardWithUid(card,state));state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);log(state,`Learned ${card.name}.`);return state;}
+  if(action.kind==='learn-advanced') {if(!(hex.site==='monastery'||(city&&hex.cityColor==='green')))return fail(state,'Advanced Actions are not taught here.');if(state.points.influence<6)return fail(state,'You need 6 Influence.');const source=hex.site==='monastery'?state.offer.monastery:state.offer.advanced;const card=source.find(c=>c.id===action.id)||source[0];if(!card)return fail(state,'No Advanced Action is available.');state.points.influence-=6;state.player.deck.unshift(cardWithUid(card,state));if(hex.site==='monastery')state.offer.monastery=state.offer.monastery.filter(c=>c.id!==card.id);else{state.offer.advanced=state.offer.advanced.filter(c=>c.id!==card.id);if(state.decks.advanced.length)state.offer.advanced.push(state.decks.advanced.shift());}log(state,`Learned ${card.name}.`);return state;}
+  if(action.kind==='learn-spell') {if(!(hex.site==='mage-tower'||(city&&hex.cityColor==='blue')))return fail(state,'Spells are not taught here.');const card=state.offer.spells.find(c=>c.id===action.id);if(!card)return fail(state,'That Spell is not available.');if(state.points.influence<7)return fail(state,'You need 7 Influence.');if(!spendMana(state,card.color))return fail(state,`You also need ${card.color} mana.`);state.points.influence-=7;state.player.deck.unshift(cardWithUid(card,state));state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);if(state.decks.spells.length)state.offer.spells.push(state.decks.spells.shift());log(state,`Learned ${card.name}.`);return state;}
   if(action.kind==='buy-artifact') {if(!(city&&hex.cityColor==='red'))return fail(state,'Artifacts are sold only in a conquered Red city.');if(state.points.influence<12)return fail(state,'You need 12 Influence.');state.points.influence-=12;state.pendingRewards.push({type:'artifact',source:'Red City'});log(state,'Purchased an Artifact reward.');return state;}
   if(action.kind==='add-elite') {if(!(city&&hex.cityColor==='white'))return fail(state,'Elite Units are added only in a conquered White city.');if(state.points.influence<2)return fail(state,'You need 2 Influence.');state.points.influence-=2;const elite=UNITS.find(u=>u.elite&&!state.offer.units.some(x=>x.id===u.id));if(elite)state.offer.units.push(clone(elite));log(state,'Added an Elite Unit to the offer.');return state;}
   return fail(state,'That interaction is not available here.');
@@ -640,8 +646,9 @@ function endTurn(state,roundAnnouncement=false) {
 }
 
 function refreshOffers(state){
-  state.offer.advanced.forEach(card=>state.decks.advanced.push(card));state.offer.spells.forEach(card=>state.decks.spells.push(card));state.offer.advanced=state.decks.advanced.splice(0,Math.min(3,state.decks.advanced.length));state.offer.spells=state.decks.spells.splice(0,Math.min(3,state.decks.spells.length));
+  if(state.offer.advanced.length)state.decks.advanced.push(state.offer.advanced.shift());if(state.decks.advanced.length)state.offer.advanced.push(state.decks.advanced.shift());if(state.offer.spells.length)state.decks.spells.push(state.offer.spells.shift());if(state.decks.spells.length)state.offer.spells.push(state.decks.spells.shift());
   state.offer.units.forEach(unit=>state.decks[unit.elite?'eliteUnits':'regularUnits'].push(unit));state.offer.units=[];const count=(state.multiplayer?state.players.length:1)+2,coreRevealed=state.map.some(hex=>hex.core&&hex.revealed!==false);for(let index=0;index<count;index++){const primary=coreRevealed&&index%2===0?'eliteUnits':'regularUnits',secondary=primary==='eliteUnits'?'regularUnits':'eliteUnits';const unit=state.decks[primary].shift()||state.decks[secondary].shift();if(unit)state.offer.units.push(unit);}
+  (state.offer.monastery||[]).forEach(card=>state.decks.advanced.push(card));state.offer.monastery=[];const monasteries=state.map.filter(hex=>hex.revealed!==false&&hex.site==='monastery'&&!hex.burned).length;for(let index=0;index<monasteries&&state.decks.advanced.length;index++)state.offer.monastery.push(state.decks.advanced.shift());
 }
 
 function nextRound(state) {

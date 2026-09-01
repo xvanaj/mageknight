@@ -139,8 +139,11 @@ export const MAP_TILES = [
   {id:'countryside-a',core:false,hexes:[[1,0,'plains'],[1,-1,'forest','glade'],[0,-1,'plains','village'],[-1,0,'hills','mine'],[-1,1,'forest'],[0,1,'lake']]},
   {id:'countryside-b',core:false,hexes:[[2,0,'hills','keep','guards'],[2,-1,'plains','rampaging','prowlers'],[2,-2,'forest','monastery'],[1,-2,'hills','mage-tower','mage'],[0,-2,'lake'],[-1,-1,'desert','ruins','golem']]},
   {id:'countryside-c',core:false,hexes:[[-2,0,'wasteland','dungeon','golem'],[-2,1,'plains','village'],[-2,2,'forest','glade'],[-1,2,'swamp','rampaging','diggers'],[0,2,'mountain'],[1,1,'desert','draconum','dragon']]},
+  {id:'countryside-d',core:false,hexes:[[4,-1,'plains','village'],[4,-2,'forest','glade'],[4,-3,'hills','keep','guards'],[4,-4,'desert','ruins','golem'],[3,-4,'wasteland','rampaging','prowlers'],[2,-4,'lake']]},
   {id:'core-a',core:true,hexes:[[3,-1,'plains'],[3,-2,'wasteland','city','city','red'],[3,-3,'desert'],[2,-3,'forest','mine'],[-3,0,'plains'],[-3,1,'hills','tomb','tomb']]},
-  {id:'core-b',core:true,hexes:[[-3,2,'forest','monster-den','den'],[-3,3,'swamp','spawning-grounds','spawn'],[-2,3,'plains','city','city','blue'],[-1,3,'hills','city','city','white'],[0,3,'forest','city','city','green'],[4,-2,'desert','draconum','highDragon']]},
+  {id:'core-b',core:true,hexes:[[-3,2,'forest','monster-den','den'],[-3,3,'swamp','spawning-grounds','spawn'],[-2,3,'plains','city','city','blue'],[-1,3,'hills','city','city','white'],[0,3,'forest','city','city','green'],[1,3,'desert','draconum','highDragon']]},
+  {id:'core-c',core:true,hexes:[[1,-4,'forest','monster-den','den'],[0,-4,'desert','draconum','dragon'],[-1,-3,'hills','keep','guards'],[-2,-2,'plains','village'],[-3,-1,'wasteland','dungeon','golem'],[-4,0,'forest','mage-tower','mage']]},
+  {id:'core-d',core:true,hexes:[[-4,1,'plains','monastery'],[-4,2,'swamp','ruins','golem'],[-4,3,'forest','glade'],[-4,4,'desert','draconum','iceDragon'],[-3,4,'hills','keep','guards'],[-2,4,'plains','mine']]},
 ];
 
 export function applyCharacterDeck(baseCards, characterId) {
