@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+test('renders the playable conquest board', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getByText('Solo Conquest rules engine')).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: /mage knight map/i })).toBeInTheDocument();
+  expect(screen.getByText(/current phase/i)).toBeInTheDocument();
 });

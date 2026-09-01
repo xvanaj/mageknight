@@ -1,0 +1,394 @@
+/*
+ * A deterministic, UI-independent Mage Knight inspired rules engine.
+ * Card and enemy definitions are intentionally data driven: the reducer owns
+ * legality, so a different UI (or a remote server) cannot bypass the rules.
+ */
+
+export const COLORS = ['blue', 'red', 'green', 'white'];
+export const TERRAIN_COST = {
+  day: { plains: 2, hills: 3, forest: 3, desert: 5, wasteland: 4, swamp: 5, lake: Infinity, mountain: Infinity },
+  night: { plains: 2, hills: 3, forest: 5, desert: 3, wasteland: 4, swamp: 5, lake: Infinity, mountain: Infinity },
+};
+
+export const SITES = {
+  portal: { name:'Portal', kind:'safe', rule:'Safe starting space. No interaction or combat.' },
+  village: { name:'Village', kind:'inhabited', rule:'Recruit village units; buy Healing for 3 Influence per point; or plunder for two cards and Reputation -1.' },
+  glade: { name:'Magical Glade', kind:'passive', rule:'At the end of your turn, throw away one Wound from hand or discard. Start a turn here with a gold mana token by Day or black by Night.' },
+  mine: { name:'Crystal Mine', kind:'passive', rule:'At the end of your turn, gain one crystal of the mine color, up to three.' },
+  keep: { name:'Keep', kind:'fortified', rule:'Assault the gray defender. Once conquered, recruit keep units here and increase hand limit while on or adjacent to an owned keep.' },
+  'mage-tower': { name:'Mage Tower', kind:'fortified', rule:'Assault the violet defender and gain a Spell. Once conquered, recruit tower units or buy a Spell for 7 Influence plus matching mana.' },
+  monastery: { name:'Monastery', kind:'inhabited', rule:'Recruit monastery units, buy Healing for 2 Influence, or learn an Advanced Action for 6 Influence. It may be burned for Reputation -3 and an Artifact.' },
+  rampaging: { name:'Orc Marauders', kind:'rampaging', rule:'Challenge from an adjacent space. Victory grants Reputation +1 in addition to Fame.' },
+  draconum: { name:'Draconum', kind:'rampaging', rule:'Challenge from an adjacent space. Victory grants Reputation +2 in addition to Fame.' },
+  dungeon: { name:'Dungeon', kind:'adventure', underground:true, rule:'Enter, then fight a brown enemy under Night rules without Units. Victory grants an Artifact.' },
+  tomb: { name:'Tomb', kind:'adventure', underground:true, rule:'Enter, then fight a red enemy under Night rules without Units. Victory grants a Spell and an Artifact.' },
+  'monster-den': { name:'Monster Den', kind:'adventure', rule:'Enter, then fight its brown enemy. Victory grants two random crystal rolls.' },
+  'spawning-grounds': { name:'Spawning Grounds', kind:'adventure', rule:'Enter, then fight two brown enemies. Victory grants an Artifact and three random crystal rolls.' },
+  ruins: { name:'Ancient Ruins', kind:'adventure', rule:'The revealed ruins token specifies an altar or enemies and its reward. This scenario uses the four-crystal cache.' },
+  city: { name:'City', kind:'fortified', rule:'Assault the city garrison. Conquered cities provide color-specific interactions and a hand-limit bonus.' },
+};
+
+export const TOVAK_SKILLS = [
+  { id:'cold-swordsmanship', name:'Cold Swordsmanship', cadence:'turn', modes:['physical','ice'], description:'Once a turn: Attack 2 or Ice Attack 2.' },
+  { id:'double-time', name:'Double Time', cadence:'turn', description:'Once a turn: Move 2 by Day or Move 1 by Night.' },
+  { id:'i-dont-give-a-damn', name:"I Don't Give a Damn!", cadence:'turn', description:'Once a turn, a sideways basic card gives 2 instead of 1 (advanced, spell, or artifact: 3).' },
+  { id:'i-feel-no-pain', name:'I Feel No Pain', cadence:'turn', description:'Once a turn outside combat: discard a Wound from hand, then draw a card.' },
+  { id:'night-sharpshooting', name:'Night Sharpshooting', cadence:'turn', description:'Once a turn: Ranged Attack 1 by Day or 2 by Night/underground.' },
+  { id:'resistance-break', name:'Resistance Break', cadence:'turn', description:'Once a combat: one enemy gets Armor -1 for each Physical, Fire, or Ice Resistance it has.' },
+  { id:'shield-mastery', name:'Shield Mastery', cadence:'turn', modes:['physical','fire','ice'], description:'Once a turn: Block 3, Fire Block 2, or Ice Block 2.' },
+  { id:'who-needs-magic', name:'Who Needs Magic?', cadence:'turn', description:'Once a turn, a sideways card gives 2; it gives 3 if no Source die is used this turn.' },
+  { id:'motivation', name:'Motivation', cadence:'round', description:'Once a round: draw two cards and gain a blue mana token.' },
+  { id:'mana-overload', name:'Mana Overload', cadence:'round', description:'Once a round: gain a basic mana token; the next card powered with that color gets +4 to one Move, Influence, Attack, or Block effect.' },
+];
+
+const CARDS = [
+  ['march', 'March', 'green', { move: 2 }, { move: 4 }],
+  ['stamina', 'Stamina', 'blue', { move: 2 }, { move: 4 }],
+  ['swiftness', 'Swiftness', 'white', { move: 2 }, { ranged: 3 }],
+  ['rage', 'Rage', 'red', { attack: 2 }, { attack: 4 }],
+  ['determination', 'Determination', 'blue', { block: 2 }, { block: 5 }],
+  ['promise', 'Promise', 'white', { influence: 2 }, { influence: 4 }],
+  ['threaten', 'Threaten', 'red', { influence: 2, reputation: -1 }, { influence: 5, reputation: -2 }],
+  ['tranquility', 'Tranquility', 'green', { heal: 1 }, { heal: 2 }],
+  ['crystallize', 'Crystallize', 'blue', { mana: 'crystal' }, { mana: 'crystal', draw: 1 }],
+  ['mana-draw', 'Mana Draw', 'white', { mana: 'token' }, { mana: 'token', draw: 1 }],
+  ['concentration', 'Concentration', 'green', { any: 1 }, { any: 2 }],
+  ['improvisation', 'Improvisation', 'red', { any: 1 }, { any: 3, discardRequired: true }],
+  ['battle-versatility', 'Battle Versatility', 'red', { attack: 2 }, { attack: 4 }],
+  ['cold-toughness', 'Cold Toughness', 'blue', { block: 2 }, { block: 5 }],
+  ['noble-manners', 'Noble Manners', 'white', { influence: 2 }, { influence: 4, fame: 1 }],
+  ['instinct', 'Instinct', 'green', { move: 2 }, { move: 4 }],
+].map(([id, name, color, basic, strong]) => ({ id, name, color, basic, strong }));
+
+export const ENEMIES = {
+  prowlers: { id: 'prowlers', name: 'Orc Prowlers', armor: 3, attack: 4, fame: 2, traits: ['swift'] },
+  diggers: { id: 'diggers', name: 'Orc Diggers', armor: 4, attack: 3, fame: 2, traits: ['fortified'] },
+  golem: { id: 'golem', name: 'Iron Golem', armor: 4, attack: 5, fame: 3, traits: ['physical-resistant'] },
+  mage: { id: 'mage', name: 'Fire Mage', armor: 4, attack: 5, fame: 4, traits: ['fire', 'fortified'] },
+  guards: { id: 'guards', name: 'Keep Guards', armor: 5, attack: 4, fame: 4, traits: ['fortified'] },
+  dragon: { id: 'dragon', name: 'Fire Dragon', armor: 7, attack: 7, fame: 8, traits: ['fire', 'brutal'] },
+  city: { id: 'city', name: 'City Garrison', armor: 8, attack: 7, fame: 10, traits: ['fortified', 'brutal'] },
+  tomb: { id:'tomb', name:'Crypt Guardian', armor:6, attack:6, fame:5, traits:['fire','physical-resistant'] },
+  den: { id:'den', name:'Cave Monster', armor:5, attack:5, fame:4, traits:[] },
+  spawn: { id:'spawn', name:'Spawn Pair', armor:8, attack:8, fame:7, traits:['brutal'] },
+};
+
+export const UNITS = [
+  { id: 'peasants', name: 'Peasants', level: 1, cost: 4, armor: 3, sites: ['village'], ability: { influence: 2 } },
+  { id: 'herbalists', name: 'Herbalists', level: 1, cost: 5, armor: 3, sites: ['village', 'monastery'], ability: { heal: 2 } },
+  { id: 'utem-guardsmen', name: 'Utem Guardsmen', level: 1, cost: 5, armor: 4, sites: ['village', 'keep'], ability: { block: 4 } },
+  { id: 'utem-crossbowmen', name: 'Utem Crossbowmen', level: 1, cost: 6, armor: 4, sites: ['village', 'keep'], ability: { ranged: 3 } },
+  { id: 'red-cape-monks', name: 'Red Cape Monks', level: 2, cost: 7, armor: 4, sites: ['monastery'], ability: { attack: 5 } },
+  { id:'illusionists',name:'Illusionists',level:2,cost:7,armor:4,sites:['mage-tower'],ability:{block:5} },
+  { id:'fire-mages',name:'Fire Mages',level:3,cost:9,armor:5,sites:['city'],elite:true,ability:{siege:5} },
+];
+
+const HEXES = [
+  [0, 0, 'plains', 'portal'], [1, 0, 'plains', null], [1, -1, 'forest', 'glade'],
+  [0, -1, 'plains', 'village'], [-1, 0, 'hills', 'mine'], [-1, 1, 'forest', null], [0, 1, 'lake', null],
+  [2, 0, 'hills', 'keep', 'guards'], [2, -1, 'plains', 'rampaging', 'prowlers'], [2, -2, 'forest', 'monastery'],
+  [1, -2, 'hills', 'mage-tower', 'mage'], [0, -2, 'lake', null], [-1, -1, 'desert', 'ruins', 'golem'],
+  [-2, 0, 'wasteland', 'dungeon', 'golem'], [-2, 1, 'plains', 'village'], [-2, 2, 'forest', 'glade'],
+  [-1, 2, 'swamp', 'rampaging', 'diggers'], [0, 2, 'mountain', null], [1, 1, 'desert', 'draconum', 'dragon'],
+  [3, -1, 'plains', null], [3, -2, 'wasteland', 'city', 'city', 'red'], [3, -3, 'desert', null], [2, -3, 'forest', 'mine'],
+  [-3, 0, 'plains', null], [-3, 1, 'hills', 'tomb', 'tomb'], [-3, 2, 'forest', 'monster-den', 'den'],
+  [-3, 3, 'swamp', 'spawning-grounds', 'spawn'], [-2, 3, 'plains', 'city', 'city', 'blue'],
+  [-1, 3, 'hills', 'city', 'city', 'white'], [0, 3, 'forest', 'city', 'city', 'green'],
+].map(([q, r, terrain, site, enemy, cityColor]) => ({ q, r, s: -q-r, terrain, site, cityColor, mineColor: site==='mine' ? COLORS[(Math.abs(q)+Math.abs(r))%4] : undefined, enemy: enemy ? { ...ENEMIES[enemy], uid: `${q}:${r}:${enemy}` } : null, conquered: false, burned:false, used: false }));
+
+const ADVANCED_CARDS = [
+  {id:'path-finding',name:'Path Finding',color:'green',type:'advanced',basic:{move:3},strong:{move:5}},
+  {id:'blood-rage',name:'Blood Rage',color:'red',type:'advanced',basic:{attack:3},strong:{attack:6}},
+  {id:'diplomacy',name:'Diplomacy',color:'white',type:'advanced',basic:{influence:3},strong:{influence:6}},
+];
+const SPELL_CARDS = [
+  {id:'fireball',name:'Fireball',color:'red',type:'spell',basic:{siege:5},strong:{siege:8}},
+  {id:'restoration',name:'Restoration',color:'green',type:'spell',basic:{heal:3},strong:{heal:5}},
+  {id:'meditation',name:'Meditation',color:'blue',type:'spell',basic:{draw:2},strong:{draw:3}},
+];
+const ARTIFACT_CARDS = [
+  {id:'banner-of-glory',name:'Banner of Glory',color:'white',type:'artifact',basic:{influence:4},strong:{influence:7}},
+  {id:'sword-of-justice',name:'Sword of Justice',color:'red',type:'artifact',basic:{attack:5},strong:{attack:8}},
+  {id:'endless-gem-pouch',name:'Endless Gem Pouch',color:'blue',type:'artifact',basic:{mana:'crystal'},strong:{draw:2}},
+];
+
+const clone = value => JSON.parse(JSON.stringify(value));
+const distance = (a, b) => (Math.abs(a.q-b.q) + Math.abs(a.r-b.r) + Math.abs((-a.q-a.r)-(-b.q-b.r))) / 2;
+const shuffled = (items, seed) => {
+  const result = [...items]; let x = seed >>> 0;
+  for (let i = result.length - 1; i > 0; i--) { x = (1664525*x + 1013904223) >>> 0; const j = x % (i+1); [result[i], result[j]] = [result[j], result[i]]; }
+  return result;
+};
+const log = (state, message) => { state.log.unshift({ turn: state.turn, round: state.round, message }); state.log = state.log.slice(0, 80); };
+const fail = (state, error) => ({ ...state, error });
+const FAME_LEVELS=[0,3,8,15,24,35,48,63,80,99];
+const levelFor = fame => Math.min(10,FAME_LEVELS.filter(value=>fame>=value).length);
+const handLimit = state => {
+  const nearOwnedKeep=state.map.some(h=>h.site==='keep'&&h.conquered&&distance(state.player,h)<=1);
+  const nearCity=state.map.some(h=>h.site==='city'&&h.conquered&&distance(state.player,h)<=1);
+  const printedLimit=5+Math.floor((state.player.level-1)/4);
+  return printedLimit+Math.max(nearOwnedKeep?(state.player.keeps||0):0,nearCity?2:0);
+};
+
+export function createGame(seed = 20260901) {
+  const deck = shuffled(CARDS.map((c, i) => ({ ...clone(c), uid: `${c.id}-${i}` })), seed);
+  const source = shuffled([...COLORS, 'gold', 'black', ...COLORS], seed + 9).slice(0, 3).map((color, i) => ({ id: `die-${i}`, color, used: false }));
+  const state = {
+    version:2, seed, scenario: 'Solo Conquest', status: 'playing', round: 1, time: 'day', turn: 1, phase: 'action',
+    map: clone(HEXES), source,
+    offer: { units: clone(UNITS.filter(unit=>!unit.elite)), advanced: clone(ADVANCED_CARDS), spells: clone(SPELL_CARDS) },
+    decks: { artifacts:shuffled(clone(ARTIFACT_CARDS),seed+31), advanced:shuffled(clone(ADVANCED_CARDS),seed+41), spells:shuffled(clone(SPELL_CARDS),seed+51) },
+    player: { name: 'Tovak', q: 0, r: 0, fame: 0, reputation: 0, level: 1, armor: 2, command: 1, deck: deck.slice(5), hand: deck.slice(0, 5), discard: [], played: [], wounds: 0, crystals: { blue: 0, red: 0, green: 0, white: 0 }, units: [], keeps: 0, cities:0, skills:[] },
+    skillDeck:shuffled(clone(TOVAK_SKILLS),seed+71), skillChoices:[], commonSkills:[],
+    points: freshPoints(), mana: [], sourceTaken: false, combat: null, pendingRewards:[], bonuses:{sideways:null,manaOverload:null}, log: [], error: null,
+  };
+  log(state, 'Solo Conquest begins. It is Day. Your first hand is ready.');
+  return state;
+}
+
+function freshPoints() { return { move: 0, influence: 0, heal: 0, attack: 0, block: 0, ranged: 0, siege: 0, iceAttack:0, iceBlock:0, fireBlock:0 }; }
+function currentHex(state) { return state.map.find(h => h.q === state.player.q && h.r === state.player.r); }
+const cardWithUid = (card,state) => ({...clone(card),uid:`${card.id}-${state.turn}-${state.player.deck.length}-${state.player.discard.length}`});
+const resistanceCount = enemy => ['physical-resistant','fire-resistant','ice-resistant'].filter(t=>enemy.traits.includes(t)).length;
+const isUnderground = state => Boolean(SITES[currentHex(state)?.site]?.underground);
+function addEffect(state, effect, sidewaysAs) {
+  if (sidewaysAs) {
+    const boosted=state.bonuses.sideways;
+    state.points[sidewaysAs] += boosted?.value || 1;
+    if(boosted)state.bonuses.sideways=null;
+  }
+  else Object.entries(effect).forEach(([type, amount]) => {
+    if (type in state.points) state.points[type] += amount;
+    else if (type === 'reputation') state.player.reputation += amount;
+    else if (type === 'fame') gainFame(state, amount);
+    else if (type === 'draw') draw(state, amount);
+    else if (type === 'mana') {
+      const color = COLORS.find(c => state.mana.includes(c)) || 'green';
+      if (amount === 'crystal' && state.player.crystals[color] < 3) state.player.crystals[color]++;
+      else state.mana.push(color);
+    }
+  });
+}
+function draw(state, count = 1) { while (count-- > 0 && state.player.deck.length) state.player.hand.push(state.player.deck.shift()); }
+function spendMana(state, color) {
+  let i = state.mana.indexOf(color);
+  if (i >= 0) { state.mana.splice(i, 1); return true; }
+  i = state.mana.indexOf('gold');
+  if (state.time === 'day' && i >= 0) { state.mana.splice(i, 1); return true; }
+  if (state.player.crystals[color] > 0) { state.player.crystals[color]--; return true; }
+  return false;
+}
+function gainFame(state, amount) {
+  const old = state.player.level; state.player.fame += amount; state.player.level = levelFor(state.player.fame);
+  for(let level=old+1;level<=state.player.level;level++) {
+    if(level%2===1){state.player.command++;state.player.armor++;}
+    else if(state.skillDeck.length){state.skillChoices=state.skillDeck.splice(0,Math.min(2,state.skillDeck.length));}
+    log(state, `Level up! You reached level ${level}${level%2===0?' and may choose a Skill.':'.'}`);
+  }
+}
+function wound(state, count) { state.player.wounds += count; for (let i=0;i<count;i++) state.player.hand.push({ id:'wound', uid:`wound-${state.turn}-${i}-${state.player.wounds}`, name:'Wound', color:'wound', basic:{}, strong:{} }); }
+
+export function legalMoves(state) {
+  if (state.phase !== 'action') return [];
+  return state.map.filter(h => distance(state.player, h) === 1 && (!h.enemy || SITES[h.site]?.kind==='adventure') && Number.isFinite(TERRAIN_COST[state.time][h.terrain]))
+    .map(h => ({ ...h, cost: TERRAIN_COST[state.time][h.terrain], legal: state.points.move >= TERRAIN_COST[state.time][h.terrain] }));
+}
+
+export function reduceGame(input, action) {
+  const state = clone(input); state.error = null;
+  if (state.status !== 'playing' && action.type !== 'NEW_GAME') return fail(state, 'This game has ended.');
+  if (action.type === 'NEW_GAME') return createGame(action.seed || Date.now());
+  switch (action.type) {
+    case 'SELECT_SKILL': {
+      const skill=state.skillChoices.find(s=>s.id===action.id); if(!skill)return fail(state,'That Skill is not currently offered.');
+      state.player.skills.push({...skill,used:false}); state.commonSkills.push(...state.skillChoices.filter(s=>s.id!==action.id)); state.skillChoices=[];
+      const advanced=state.offer.advanced.shift(); if(advanced)state.player.deck.unshift(cardWithUid(advanced,state));
+      log(state,`Learned ${skill.name}${advanced?` and gained ${advanced.name}`:''}.`); return state;
+    }
+    case 'USE_SKILL': return activateSkill(state,action);
+    case 'CLAIM_REWARD': return claimReward(state,action);
+    case 'TAKE_SOURCE': {
+      if (state.sourceTaken) return fail(state, 'Only one Source die may be used per turn.');
+      const die = state.source.find(d => d.id === action.id); if (!die) return fail(state, 'Unknown Source die.');
+      if (die.color === 'black' && state.time === 'day') return fail(state, 'Black mana cannot be used during the Day.');
+      state.mana.push(die.color); state.sourceTaken = true;
+      const faces = [...COLORS, state.time === 'day' ? 'gold' : 'black']; die.color = faces[(state.seed + state.turn * 7 + Number(die.id.slice(-1))) % faces.length];
+      log(state, `Took ${state.mana[state.mana.length-1]} mana from the Source.`); return state;
+    }
+    case 'PLAY_CARD': {
+      if (!['action','combat-ranged','combat-block','combat-attack'].includes(state.phase)) return fail(state, 'Cards cannot be played in this phase.');
+      const index = state.player.hand.findIndex(c => c.uid === action.uid); if (index < 0) return fail(state, 'That card is not in your hand.');
+      const card = state.player.hand[index]; if (card.id === 'wound') return fail(state, 'Wounds cannot be played.');
+      const combatStat = {'combat-ranged':['ranged','siege'],'combat-block':['block'],'combat-attack':['attack']}[state.phase];
+      if (combatStat) {
+        const offered = action.mode === 'sideways' ? action.as : Object.keys(card[action.mode] || {}).filter(k => (card[action.mode] || {})[k]);
+        const offeredStats = Array.isArray(offered) ? offered : [offered];
+        if (!offeredStats.some(k => combatStat.includes(k))) return fail(state, `Only ${combatStat.join(' or ')} effects may be committed in this combat phase.`);
+      }
+      if (action.mode === 'strong' && !spendMana(state, card.color)) return fail(state, `The strong action requires ${card.color} mana.`);
+      if (action.mode === 'sideways' && !['move','influence','attack','block'].includes(action.as)) return fail(state, 'A sideways card provides Move, Influence, Attack, or Block 1.');
+      if(action.mode==='sideways'&&state.bonuses.sideways?.advancedValue&&['advanced','spell','artifact'].includes(card.type))state.bonuses.sideways.value=state.bonuses.sideways.advancedValue;
+      addEffect(state, card[action.mode] || {}, action.mode === 'sideways' ? action.as : null);
+      if(action.mode==='strong'&&state.bonuses.manaOverload?.color===card.color){const stat=['move','influence','attack','block'].find(k=>(card.strong||{})[k]);if(stat){state.points[stat]+=4;log(state,`Mana Overload adds ${stat} 4.`);}state.bonuses.manaOverload=null;}
+      state.player.played.push(state.player.hand.splice(index,1)[0]); log(state, `${card.name}: ${action.mode}${action.as ? ` as ${action.as}` : ''}.`); return state;
+    }
+    case 'USE_UNIT': {
+      const unit = state.player.units.find(u => u.id === action.id); if (!unit || unit.spent) return fail(state, 'That unit is unavailable.');
+      if(state.combat && SITES[state.map.find(h=>h.q===state.combat.q&&h.r===state.combat.r)?.site]?.underground)return fail(state,'Units cannot be used in a Dungeon or Tomb.');
+      addEffect(state, unit.ability); unit.spent = true; log(state, `${unit.name} activated.`); return state;
+    }
+    case 'MOVE': {
+      if (state.phase !== 'action') return fail(state, 'Finish combat before moving.');
+      const hex = state.map.find(h => h.q === action.q && h.r === action.r); if (!hex || distance(state.player,hex)!==1) return fail(state, 'You may only move to an adjacent revealed space.');
+      if (hex.enemy && SITES[hex.site]?.kind!=='adventure') return fail(state, 'An enemy blocks that space. Start combat to enter it.');
+      const cost = TERRAIN_COST[state.time][hex.terrain]; if (!Number.isFinite(cost)) return fail(state, 'That terrain is impassable.');
+      if (state.points.move < cost) return fail(state, `You need ${cost} Move.`);
+      state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r; log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
+      return state;
+    }
+    case 'START_COMBAT': {
+      if (state.phase !== 'action') return fail(state, 'Already resolving an action.');
+      const hex=state.map.find(h=>h.q===action.q&&h.r===action.r); if(!hex?.enemy) return fail(state,'There is no enemy there.');
+      const kind=SITES[hex.site]?.kind;
+      if(kind==='adventure' && distance(state.player,hex)!==0)return fail(state,'You must enter an adventure site before exploring it.');
+      if(kind!=='adventure' && distance(state.player,hex)!==1)return fail(state,'You must be adjacent to that enemy.');
+      let origin={q:state.player.q,r:state.player.r};
+      if(kind==='fortified'){
+        const entryCost=TERRAIN_COST[state.time][hex.terrain]; if(state.points.move<entryCost)return fail(state,`The assault requires ${entryCost} Move to enter that terrain.`);
+        state.points.move-=entryCost;state.player.reputation=Math.max(-7,state.player.reputation-1);
+      }
+      state.phase='combat-ranged'; state.combat={q:hex.q,r:hex.r,origin,kind,enemy:clone(hex.enemy),blocked:false,woundsTaken:0}; log(state,`Combat begins against ${hex.enemy.name}. Ranged/Siege phase.`); return state;
+    }
+    case 'BURN_MONASTERY': {
+      const hex=currentHex(state); if(state.phase!=='action'||hex?.site!=='monastery'||hex.burned)return fail(state,'You must be at an unburned monastery.');
+      state.player.reputation=Math.max(-7,state.player.reputation-3); hex.enemy={...clone(ENEMIES.mage),id:'monastery-defender',name:'Monastery Defender',uid:`burn-${state.turn}`};
+      state.phase='combat-ranged';state.combat={q:hex.q,r:hex.r,origin:{q:hex.q,r:hex.r},kind:'burn',enemy:clone(hex.enemy),blocked:false,woundsTaken:0};log(state,'You attempt to burn the monastery: Reputation -3.');return state;
+    }
+    case 'RESOLVE_RANGED': {
+      if(state.phase!=='combat-ranged')return fail(state,'Not in the Ranged/Siege phase.'); const e=state.combat.enemy;
+      const required=e.armor; const siteFortified=state.combat.kind==='fortified';const tokenFortified=e.traits.includes('fortified');
+      let power=siteFortified&&tokenFortified?0:(siteFortified||tokenFortified?state.points.siege:state.points.siege+state.points.ranged);
+      if(e.traits.includes('physical-resistant'))power=Math.floor(power/2);
+      if(power>=required)return winCombat(state,'ranged'); state.phase='combat-block'; log(state,'Enemy survives. Block phase.'); return state;
+    }
+    case 'RESOLVE_BLOCK': {
+      if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.'); const e=state.combat.enemy;
+      const required=e.attack*(e.traits.includes('swift')?2:1);let efficientBlock=state.points.block+state.points.iceBlock+state.points.fireBlock;
+      if(e.traits.includes('fire'))efficientBlock=state.points.iceBlock+Math.floor((state.points.block+state.points.fireBlock)/2);
+      if(e.traits.includes('ice'))efficientBlock=state.points.fireBlock+Math.floor((state.points.block+state.points.iceBlock)/2);
+      state.combat.blocked=efficientBlock>=required;
+      if(!state.combat.blocked){ const damage=e.attack*(e.traits.includes('brutal')?2:1); const wounds=Math.max(1,Math.ceil(damage/state.player.armor)); wound(state,wounds); state.combat.woundsTaken=wounds; log(state,`Unblocked attack: ${wounds} Wound${wounds===1?'':'s'}.`); }
+      else log(state,'Attack fully blocked.'); state.phase='combat-attack'; return state;
+    }
+    case 'RESOLVE_ATTACK': {
+      if(state.phase!=='combat-attack')return fail(state,'Not in the Attack phase.'); const e=state.combat.enemy;
+      const effective=state.points.iceAttack+(e.traits.includes('physical-resistant')?Math.floor(state.points.attack/2):state.points.attack);const required=e.armor;if(effective<required)return fail(state,`You need ${required} effective Attack to defeat this enemy (currently ${effective}).`);
+      return winCombat(state,'attack');
+    }
+    case 'INTERACT': return interact(state, action);
+    case 'REST': {
+      if(state.phase!=='action')return fail(state,'You cannot rest during combat.'); const wi=state.player.hand.findIndex(c=>c.id==='wound');
+      if(wi<0)return fail(state,'You have no Wound in hand to discard for a rest.'); state.player.discard.push(state.player.hand.splice(wi,1)[0]);
+      const nonWound=state.player.hand.findIndex(c=>c.id!=='wound'); if(nonWound>=0)state.player.discard.push(state.player.hand.splice(nonWound,1)[0]); log(state,'Rested: discarded a Wound and one non-Wound card.'); return endTurn(state);
+    }
+    case 'END_TURN': if(state.phase!=='action')return fail(state,'Combat must be completed first.');if(state.pendingRewards.length)return fail(state,'Claim your pending site rewards before ending the turn.'); return endTurn(state);
+    case 'END_ROUND': {
+      if(state.player.deck.length || state.player.hand.some(c=>c.id!=='wound')) return fail(state,'You may announce end of round only when your Deed deck is empty and you have no playable cards.');
+      return nextRound(state);
+    }
+    default: return fail(state, 'Unknown action.');
+  }
+}
+
+function activateSkill(state,action){
+  const skill=state.player.skills.find(s=>s.id===action.id);if(!skill)return fail(state,'You have not learned that Skill.');
+  if(skill.used||skill.roundUsed)return fail(state,`${skill.name} has already been used ${skill.cadence==='round'?'this round':'this turn'}.`);
+  const mark=()=>{if(skill.cadence==='round')skill.roundUsed=true;else skill.used=true;log(state,`${skill.name} activated.`);return state;};
+  if(skill.id==='double-time'){if(state.phase!=='action')return fail(state,'Double Time is used outside combat.');state.points.move+=state.time==='day'?2:1;return mark();}
+  if(skill.id==='night-sharpshooting'){if(!['combat-ranged','combat-attack'].includes(state.phase))return fail(state,'Night Sharpshooting is a combat Skill.');state.points.ranged+=(state.time==='night'||isUnderground(state))?2:1;return mark();}
+  if(skill.id==='cold-swordsmanship'){if(state.phase!=='combat-attack')return fail(state,'Cold Swordsmanship is used in the Attack phase.');if(action.mode==='ice')state.points.iceAttack+=2;else state.points.attack+=2;return mark();}
+  if(skill.id==='shield-mastery'){if(state.phase!=='combat-block')return fail(state,'Shield Mastery is used in the Block phase.');if(action.mode==='ice')state.points.iceBlock+=2;else if(action.mode==='fire')state.points.fireBlock+=2;else state.points.block+=3;return mark();}
+  if(skill.id==='resistance-break'){if(!state.combat)return fail(state,'Resistance Break requires an enemy in combat.');const reduction=resistanceCount(state.combat.enemy);if(!reduction)return fail(state,'That enemy has no resistance to break.');state.combat.enemy.armor=Math.max(1,state.combat.enemy.armor-reduction);return mark();}
+  if(skill.id==='i-feel-no-pain'){if(state.combat)return fail(state,'I Feel No Pain cannot be used during combat.');const i=state.player.hand.findIndex(c=>c.id==='wound');if(i<0)return fail(state,'You need a Wound in hand.');state.player.discard.push(state.player.hand.splice(i,1)[0]);draw(state,1);return mark();}
+  if(skill.id==='i-dont-give-a-damn'){state.bonuses.sideways={value:2,advancedValue:3,skill:skill.id};return mark();}
+  if(skill.id==='who-needs-magic'){state.bonuses.sideways={value:state.sourceTaken?2:3,skill:skill.id};return mark();}
+  if(skill.id==='motivation'){if(state.combat)return fail(state,'Motivation cannot be used during combat.');draw(state,2);state.mana.push('blue');return mark();}
+  if(skill.id==='mana-overload'){const color=action.color;if(!COLORS.includes(color))return fail(state,'Choose a basic mana color.');state.mana.push(color);state.bonuses.manaOverload={color};return mark();}
+  return fail(state,'This Skill has no implemented effect.');
+}
+
+function winCombat(state, phase) {
+  const {q,r,enemy,kind}=state.combat; const hex=state.map.find(h=>h.q===q&&h.r===r); hex.enemy=null;
+  gainFame(state,enemy.fame); state.phase='action'; state.combat=null;
+  if(kind==='fortified'){state.player.q=q;state.player.r=r;hex.conquered=true;}
+  if(kind==='adventure'||kind==='burn')hex.conquered=true;
+  if(kind==='burn'){hex.burned=true;state.pendingRewards.push({type:'artifact',source:'Burned monastery'});}
+  if(hex.site==='keep')state.player.keeps++;
+  if(hex.site==='mage-tower')state.pendingRewards.push({type:'spell',source:'Mage Tower'});
+  if(hex.site==='dungeon')state.pendingRewards.push({type:(state.seed+state.turn)%3===0?'spell':'artifact',source:'Dungeon'});
+  if(hex.site==='tomb')state.pendingRewards.push({type:'spell',source:'Tomb'},{type:'artifact',source:'Tomb'});
+  if(hex.site==='monster-den')state.pendingRewards.push({type:'crystals',count:2,source:'Monster Den'});
+  if(hex.site==='spawning-grounds')state.pendingRewards.push({type:'artifact',source:'Spawning Grounds'},{type:'crystals',count:3,source:'Spawning Grounds'});
+  if(hex.site==='ruins')state.pendingRewards.push({type:'crystals',count:4,source:'Ancient Ruins'});
+  if(hex.site==='rampaging')state.player.reputation=Math.min(5,state.player.reputation+1);
+  if(hex.site==='draconum')state.player.reputation=Math.min(5,state.player.reputation+2);
+  if(hex.site==='city'){state.player.cities++;if(state.player.cities>=2){state.status='won';log(state,'Two cities fall. Solo Conquest is complete!');}}
+  log(state,`${enemy.name} defeated in the ${phase} phase for ${enemy.fame} Fame.`); return state;
+}
+
+function claimReward(state,action){
+  const reward=state.pendingRewards[0];if(!reward)return fail(state,'There is no pending reward.');
+  if(reward.type==='crystals'){
+    const colors=(action.colors||COLORS).filter(c=>COLORS.includes(c)).slice(0,reward.count);if(colors.length<reward.count)return fail(state,`Resolve ${reward.count} crystal rolls.`);
+    colors.forEach(c=>{if(state.player.crystals[c]<3)state.player.crystals[c]++;});
+  } else {
+    const offer=reward.type==='spell'?state.offer.spells:state.decks.artifacts;const card=offer.find(c=>c.id===action.id)||offer[0];if(!card)return fail(state,`No ${reward.type} is available.`);
+    state.player.deck.unshift(cardWithUid(card,state));if(reward.type==='spell')state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);else state.decks.artifacts=state.decks.artifacts.filter(c=>c.id!==card.id);
+  }
+  state.pendingRewards.shift();log(state,`Claimed ${reward.type} reward from ${reward.source}.`);return state;
+}
+
+function interact(state, action) {
+  if(state.phase!=='action')return fail(state,'Finish combat before interacting.'); const hex=currentHex(state);
+  if(!hex?.site)return fail(state,'There is nothing to interact with here.');
+  if(state.player.reputation<=-7)return fail(state,'Your Reputation is at X; locals refuse to interact.');
+  const city=hex.site==='city'&&hex.conquered;const ownedSite=(hex.site==='keep'||hex.site==='mage-tower')&&hex.conquered;
+  if(['keep','mage-tower','city'].includes(hex.site)&&!ownedSite&&!city)return fail(state,'This fortified site must be conquered before interaction.');
+  if(action.kind==='heal') { const count=action.count||1; if(!['village','monastery'].includes(hex.site))return fail(state,'Healing is not offered here.');const each=hex.site==='monastery'?2:3;const price=count*each;if(state.points.influence<price)return fail(state,`You need ${price} Influence.`); if(state.player.wounds<count)return fail(state,'Not enough Wounds to heal.'); state.points.influence-=price; state.player.wounds-=count;removeWounds(state,count);log(state,`Healed ${count} Wound${count===1?'':'s'}.`); return state; }
+  if(action.kind==='recruit') { const unit=state.offer.units.find(u=>u.id===action.id); if(!unit)return fail(state,'That unit is not in the offer.');const allowed=(city&&hex.cityColor==='white')||unit.sites.includes(hex.site)||(city&&unit.sites.includes('city'));if(!allowed)return fail(state,`${unit.name} cannot be recruited here.`); if(state.player.units.length>=state.player.command)return fail(state,'All command slots are full.'); const modifier=Math.max(-5,Math.min(5,state.player.reputation)); const cost=Math.max(0,unit.cost-modifier); if(state.points.influence<cost)return fail(state,`You need ${cost} Influence after reputation.`); state.points.influence-=cost; state.player.units.push({...unit,spent:false}); state.offer.units=state.offer.units.filter(u=>u.id!==unit.id); log(state,`Recruited ${unit.name}.`); return state; }
+  if(action.kind==='plunder') { if(hex.site!=='village')return fail(state,'Only villages may be plundered.'); state.player.reputation=Math.max(-7,state.player.reputation-1); draw(state,2); log(state,'Plundered the village: drew two cards and lost 1 Reputation.'); return endTurn(state); }
+  if(action.kind==='learn-advanced') {if(!(hex.site==='monastery'||(city&&hex.cityColor==='green')))return fail(state,'Advanced Actions are not taught here.');if(state.points.influence<6)return fail(state,'You need 6 Influence.');const card=state.offer.advanced.find(c=>c.id===action.id)||state.offer.advanced[0];if(!card)return fail(state,'No Advanced Action is available.');state.points.influence-=6;state.player.deck.unshift(cardWithUid(card,state));state.offer.advanced=state.offer.advanced.filter(c=>c.id!==card.id);log(state,`Learned ${card.name}.`);return state;}
+  if(action.kind==='learn-spell') {if(!(hex.site==='mage-tower'||(city&&hex.cityColor==='blue')))return fail(state,'Spells are not taught here.');const card=state.offer.spells.find(c=>c.id===action.id);if(!card)return fail(state,'That Spell is not available.');if(state.points.influence<7)return fail(state,'You need 7 Influence.');if(!spendMana(state,card.color))return fail(state,`You also need ${card.color} mana.`);state.points.influence-=7;state.player.deck.unshift(cardWithUid(card,state));state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);log(state,`Learned ${card.name}.`);return state;}
+  if(action.kind==='buy-artifact') {if(!(city&&hex.cityColor==='red'))return fail(state,'Artifacts are sold only in a conquered Red city.');if(state.points.influence<12)return fail(state,'You need 12 Influence.');state.points.influence-=12;state.pendingRewards.push({type:'artifact',source:'Red City'});log(state,'Purchased an Artifact reward.');return state;}
+  if(action.kind==='add-elite') {if(!(city&&hex.cityColor==='white'))return fail(state,'Elite Units are added only in a conquered White city.');if(state.points.influence<2)return fail(state,'You need 2 Influence.');state.points.influence-=2;const elite=UNITS.find(u=>u.elite&&!state.offer.units.some(x=>x.id===u.id));if(elite)state.offer.units.push(clone(elite));log(state,'Added an Elite Unit to the offer.');return state;}
+  return fail(state,'That interaction is not available here.');
+}
+
+function removeWounds(state,count){
+  for(const pile of [state.player.hand,state.player.discard])for(let i=pile.length-1;i>=0&&count>0;i--)if(pile[i].id==='wound'){pile.splice(i,1);count--;}
+}
+
+function endTurn(state) {
+  const hex=currentHex(state);
+  if(hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
+  if(hex?.site==='glade'&&state.player.wounds>0){const before=state.player.hand.length+state.player.discard.length;removeWounds(state,1);if(state.player.hand.length+state.player.discard.length<before){state.player.wounds--;log(state,'The magical glade removed one Wound.');}}
+  state.player.discard.push(...state.player.played); state.player.played=[]; state.points=freshPoints(); state.mana=[]; state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;
+  state.player.units.forEach(u=>u.spent=false);state.player.skills.forEach(s=>s.used=false); const target=handLimit(state); if(state.player.hand.length<target)draw(state,target-state.player.hand.length);
+  if(hex?.site==='glade')state.mana.push(state.time==='day'?'gold':'black');
+  state.turn++; log(state,`Turn ${state.turn} begins.`); return state;
+}
+
+function nextRound(state) {
+  if(state.round>=6){state.status='lost';log(state,'Night 3 ends before the city is conquered.');return state;}
+  state.round++; state.time=state.time==='day'?'night':'day'; state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round); state.player.hand=[];state.player.discard=[];draw(state,handLimit(state));
+  state.map.forEach(h=>h.used=false); state.source=shuffled([...COLORS,state.time==='day'?'gold':'black'],state.seed+state.round).slice(0,3).map((color,i)=>({id:`die-${i}`,color})); state.points=freshPoints();state.turn++;state.mana=[];state.sourceTaken=false;state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});
+  log(state,`${state.time==='day'?'Day':'Night'} ${Math.ceil(state.round/2)} begins.`); return state;
+}
+
+export const rulesSummary = [
+  ['Turn', 'Play cards for their basic action, power one with matching mana, or play any non-Wound card sideways for Move, Influence, Attack, or Block 1. Use at most one Source die.'],
+  ['Movement', 'Pay the destination terrain cost. Forest costs 3 by day/5 by night; desert 5 by day/3 by night. Lakes and mountains are impassable.'],
+  ['Combat', 'Resolve Ranged/Siege, Block, then Attack. Fortified enemies require Siege in the first phase. Swift doubles block needed; Brutal doubles unblocked damage; physical resistance doubles physical armor.'],
+  ['Sites', 'Recruit and heal at inhabited sites, gain crystals at mines, heal at glades, and assault fortified sites for Move 2 and Reputation −1.'],
+  ['Rounds', 'When your deck is exhausted, finish the round. Day and Night alternate; cards and units ready and the deck reshuffles. Conquer the city by the end of Night 3.'],
+];
