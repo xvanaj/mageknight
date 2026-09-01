@@ -251,7 +251,7 @@ function currentHex(state) { return state.map.find(h => h.q === state.player.q &
 const cardWithUid = (card,state) => ({...clone(card),uid:`${card.id}-${state.turn}-${state.player.deck.length}-${state.player.discard.length}`});
 const resistanceCount = enemy => ['physical-resistant','fire-resistant','ice-resistant'].filter(t=>enemy.traits.includes(t)).length;
 const isUnderground = state => Boolean(SITES[currentHex(state)?.site]?.underground);
-function addEffect(state, effect, sidewaysAs) {
+function addEffect(state, effect, sidewaysAs, choices={}) {
   if (sidewaysAs) {
     const boosted=state.bonuses.sideways;
     state.points[sidewaysAs] += boosted?.value || 1;
@@ -262,13 +262,14 @@ function addEffect(state, effect, sidewaysAs) {
     else if (type === 'reputation') state.player.reputation += amount;
     else if (type === 'fame') gainFame(state, amount);
     else if (type === 'draw') draw(state, amount);
-    else if(type==='any'||type==='anyCombat')state.points[state.combat?'attack':'move']+=amount;
+    else if(type==='any'||type==='anyCombat')state.points[choices.effectAs]+=amount;
     else if(type==='command')state.player.command+=amount;
-    else if(type==='unitReady'){const unit=state.player.units.find(item=>item.spent);if(unit)unit.spent=false;}
+    else if(type==='unitReady'){const unit=state.player.units.find(item=>item.id===choices.unitId);if(unit)unit.spent=false;}
     else if(type==='woundCost'&&amount>0)wound(state,amount);
+    else if(type==='discardRequired'){}
     else if(type.endsWith('Crystal')){const color=type.replace('Crystal','');if(state.player.crystals[color]<3)state.player.crystals[color]++;}
     else if (type === 'mana') {
-      const color = COLORS.find(c => state.mana.includes(c)) || 'green';
+      const color = choices.manaColor;
       if (amount === 'crystal' && state.player.crystals[color] < 3) state.player.crystals[color]++;
       else state.mana.push(color);
     }
@@ -368,9 +369,15 @@ export function reduceGame(input, action) {
       if (!['action','combat-ranged','combat-block','combat-attack'].includes(state.phase)) return fail(state, 'Cards cannot be played in this phase.');
       const index = state.player.hand.findIndex(c => c.uid === action.uid); if (index < 0) return fail(state, 'That card is not in your hand.');
       const card = state.player.hand[index]; if (card.id === 'wound') return fail(state, 'Wounds cannot be played.');
+      const effect=card[action.mode]||{};
+      if(effect.any&&!['move','influence','attack','block'].includes(action.effectAs))return fail(state,'Choose Move, Influence, Attack, or Block for this flexible effect.');
+      if(effect.anyCombat&&!['ranged','siege','attack','block'].includes(action.effectAs))return fail(state,'Choose a combat power for this flexible effect.');
+      if(effect.mana&&!COLORS.includes(action.manaColor))return fail(state,'Choose a basic mana color to gain.');
+      if(effect.unitReady&&!state.player.units.some(unit=>unit.id===action.unitId&&unit.spent))return fail(state,'Choose a spent Unit to ready.');
+      if(effect.discardRequired&&!state.player.hand.some(item=>item.uid===action.discardUid&&item.uid!==card.uid&&item.id!=='wound'))return fail(state,'Choose another non-Wound card to discard as the cost.');
       const combatStat = {'combat-ranged':['ranged','siege'],'combat-block':['block'],'combat-attack':['attack']}[state.phase];
       if (combatStat) {
-        const offered = action.mode === 'sideways' ? action.as : Object.keys(card[action.mode] || {}).filter(k => (card[action.mode] || {})[k]);
+        const offered = action.mode === 'sideways' ? action.as : [action.effectAs,...Object.keys(effect).filter(k => effect[k])].filter(Boolean);
         const offeredStats = Array.isArray(offered) ? offered : [offered];
         if (!offeredStats.some(k => combatStat.includes(k))) return fail(state, `Only ${combatStat.join(' or ')} effects may be committed in this combat phase.`);
       }
@@ -379,9 +386,9 @@ export function reduceGame(input, action) {
       } else if(card.type!=='artifact'&&action.mode==='strong'&&!spendMana(state,card.color))return fail(state,`The strong action requires ${card.color} mana.`);
       if (action.mode === 'sideways' && !['move','influence','attack','block'].includes(action.as)) return fail(state, 'A sideways card provides Move, Influence, Attack, or Block 1.');
       if(action.mode==='sideways'&&state.bonuses.sideways?.advancedValue&&['advanced','spell','artifact'].includes(card.type))state.bonuses.sideways.value=state.bonuses.sideways.advancedValue;
-      addEffect(state, card[action.mode] || {}, action.mode === 'sideways' ? action.as : null);
+      addEffect(state, effect, action.mode === 'sideways' ? action.as : null,action);
       if(action.mode==='strong'&&state.bonuses.manaOverload?.color===card.color){const stat=['move','influence','attack','block'].find(k=>(card.strong||{})[k]);if(stat){state.points[stat]+=4;log(state,`Mana Overload adds ${stat} 4.`);}state.bonuses.manaOverload=null;}
-      const committed=state.player.hand.splice(index,1)[0];if(card.type==='artifact'&&action.mode==='strong')state.player.removed.push(committed);else state.player.played.push(committed); log(state, `${card.name}: ${action.mode}${action.as ? ` as ${action.as}` : ''}.`); return state;
+      const committedIndex=state.player.hand.findIndex(item=>item.uid===card.uid),committed=state.player.hand.splice(committedIndex,1)[0];if(effect.discardRequired){const discardIndex=state.player.hand.findIndex(item=>item.uid===action.discardUid);state.player.discard.push(state.player.hand.splice(discardIndex,1)[0]);}if(card.type==='artifact'&&action.mode==='strong')state.player.removed.push(committed);else state.player.played.push(committed); log(state, `${card.name}: ${action.mode}${action.as||action.effectAs ? ` as ${action.as||action.effectAs}` : ''}.`); return state;
     }
     case 'DISCARD_CARD': {
       if(state.phase!=='action')return fail(state,'Cards may be discarded during the action phase.');const index=state.player.hand.findIndex(card=>card.uid===action.uid&&card.id!=='wound');if(index<0)return fail(state,'Choose a non-Wound card from your hand.');const card=state.player.hand.splice(index,1)[0];state.player.discard.push(card);log(state,`${card.name} discarded.`);return state;
@@ -525,7 +532,7 @@ function activateSkill(state,action){
   if(skill.id==='who-needs-magic'){state.bonuses.sideways={value:state.sourceTaken?2:3,skill:skill.id};return mark();}
   if(skill.id==='motivation'){if(state.combat)return fail(state,'Motivation cannot be used during combat.');draw(state,2);state.mana.push('blue');return mark();}
   if(skill.id==='mana-overload'){const color=action.color;if(!COLORS.includes(color))return fail(state,'Choose a basic mana color.');state.mana.push(color);state.bonuses.manaOverload={color};return mark();}
-  if(skill.effect){addEffect(state,{[skill.effect]:skill.value});return mark();}
+  if(skill.effect){if((skill.effect==='any'||skill.effect==='anyCombat')&&!['move','influence','attack','block','ranged','siege'].includes(action.mode))return fail(state,'Choose the power this Skill should provide.');if(skill.effect==='mana'&&!COLORS.includes(action.color))return fail(state,'Choose a basic mana color.');if(skill.effect==='unitReady'&&!state.player.units.some(unit=>unit.id===action.unitId&&unit.spent))return fail(state,'Choose a spent Unit to ready.');addEffect(state,{[skill.effect]:skill.value},null,{effectAs:action.mode,manaColor:action.color,unitId:action.unitId});return mark();}
   return fail(state,'This Skill has no implemented effect.');
 }
 
