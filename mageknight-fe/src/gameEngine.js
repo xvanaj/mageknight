@@ -9,20 +9,20 @@ import { applyCharacterDeck, CHARACTER_PROFILES, EXTENDED_ACTIONS, EXTENDED_ARTI
 export const COLORS = ['blue', 'red', 'green', 'white'];
 export const TACTICS = {
   day: [
-    { id:'early-bird', number:1, name:'Early Bird', description:'Initiative 1 · earliest Day tactic.' },
-    { id:'rethink', number:2, name:'Rethink', description:'Initiative 2 · early Day tactic.' },
-    { id:'mana-steal', number:3, name:'Mana Steal', description:'Initiative 3 · early-middle Day tactic.' },
-    { id:'planning', number:4, name:'Planning', description:'Initiative 4 · late-middle Day tactic.' },
-    { id:'great-start', number:5, name:'Great Start', description:'Initiative 5 · late Day tactic.' },
-    { id:'the-right-moment', number:6, name:'The Right Moment', description:'Initiative 6 · latest Day tactic.' },
+    { id:'early-bird', number:1, name:'Early Bird', effect:'choice', description:'Once on your first turn: Move 2 or Influence 1.' },
+    { id:'rethink', number:2, name:'Rethink', effect:'cycle', description:'Once this round: discard up to two non-Wound cards and draw the same number.' },
+    { id:'mana-steal', number:3, name:'Mana Steal', effect:'mana', description:'Once this round: gain a gold mana token during Day.' },
+    { id:'planning', number:4, name:'Planning', effect:'hand', description:'Hand limit +1 while no earlier player is adjacent.' },
+    { id:'great-start', number:5, name:'Great Start', effect:'draw', description:'When chosen, draw two cards.' },
+    { id:'the-right-moment', number:6, name:'The Right Moment', effect:'extra-turn', description:'Once this round: take another turn immediately after this one.' },
   ],
   night: [
-    { id:'from-the-dusk', number:1, name:'From the Dusk', description:'Initiative 1 · earliest Night tactic.' },
-    { id:'long-night', number:2, name:'Long Night', description:'Initiative 2 · early Night tactic.' },
-    { id:'mana-search', number:3, name:'Mana Search', description:'Initiative 3 · early-middle Night tactic.' },
-    { id:'midnight-meditation', number:4, name:'Midnight Meditation', description:'Initiative 4 · late-middle Night tactic.' },
-    { id:'preparation', number:5, name:'Preparation', description:'Initiative 5 · late Night tactic.' },
-    { id:'sparing-power', number:6, name:'Sparing Power', description:'Initiative 6 · latest Night tactic.' },
+    { id:'from-the-dusk', number:1, name:'From the Dusk', effect:'choice', description:'Once on your first turn: Move 2 or Influence 1.' },
+    { id:'long-night', number:2, name:'Long Night', effect:'long-night', description:'Once this round: return up to three discard cards to the Deed deck and shuffle.' },
+    { id:'mana-search', number:3, name:'Mana Search', effect:'mana', description:'Once this round: gain a basic mana token of your choice.' },
+    { id:'midnight-meditation', number:4, name:'Midnight Meditation', effect:'cycle', description:'Once this round: discard up to two non-Wound cards and draw that many plus one.' },
+    { id:'preparation', number:5, name:'Preparation', effect:'prepare', description:'When chosen, put one selected card from the Deed deck into your hand.' },
+    { id:'sparing-power', number:6, name:'Sparing Power', effect:'spare', description:'Once this round: carry up to 3 unused Move, Influence, Attack, or Block into your next turn.' },
   ],
 };
 export const TERRAIN_COST = {
@@ -140,6 +140,11 @@ const ARTIFACT_CARDS = [
 ];
 
 const clone = value => JSON.parse(JSON.stringify(value));
+const migrateState=state=>{
+  const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
+  state.decks=state.decks||{};const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat)state.combat.damageUnits=state.combat.damageUnits||[];state.version=5;return state;
+};
+const enemyGroup=members=>{const list=members.map(clone);return {id:list.map(enemy=>enemy.id).join('+'),uid:list.map(enemy=>enemy.uid||enemy.id).join('|'),name:list.length>1?`${list.length} defenders`:list[0].name,armor:list.reduce((sum,enemy)=>sum+enemy.armor,0),attack:list.reduce((sum,enemy)=>sum+enemy.attack,0),fame:list.reduce((sum,enemy)=>sum+enemy.fame,0),traits:[...new Set(list.flatMap(enemy=>enemy.traits||[]))],members:list};};
 const distance = (a, b) => (Math.abs(a.q-b.q) + Math.abs(a.r-b.r) + Math.abs((-a.q-a.r)-(-b.q-b.r))) / 2;
 const shuffled = (items, seed) => {
   const result = [...items]; let x = seed >>> 0;
@@ -150,11 +155,13 @@ const log = (state, message) => { state.log.unshift({ turn: state.turn, round: s
 const fail = (state, error) => ({ ...state, error });
 const FAME_LEVELS=[0,3,8,15,24,35,48,63,80,99];
 const levelFor = fame => Math.min(10,FAME_LEVELS.filter(value=>fame>=value).length);
+const reputationInfluence=reputation=>({5:3,4:2,3:2,2:1,1:1,0:0,'-1':-1,'-2':-1,'-3':-2,'-4':-2,'-5':-3,'-6':-5}[reputation]??-99);
 const handLimit = state => {
   const nearOwnedKeep=state.map.some(h=>h.site==='keep'&&h.conquered&&distance(state.player,h)<=1);
   const nearCity=state.map.some(h=>h.site==='city'&&h.conquered&&distance(state.player,h)<=1);
   const printedLimit=5+Math.floor((state.player.level-1)/4);
-  return printedLimit+Math.max(nearOwnedKeep?(state.player.keeps||0):0,nearCity?2:0);
+  const planning=state.player.tactic?.id==='planning'&&!state.player.tacticUsed?1:0;
+  return printedLimit+Math.max(nearOwnedKeep?(state.player.keeps||0):0,nearCity?2:0)+planning;
 };
 
 const tileForHex=(q,r)=>MAP_TILES.find(tile=>tile.hexes.some(hex=>hex[0]===q&&hex[1]===r));
@@ -167,21 +174,22 @@ const makePlayer=(seed,character='tovak',name)=>{
   const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
   const cards=applyCharacterDeck(CARDS,character);
   const deck=shuffled(cards.map((card,index)=>({...clone(card),uid:`${card.id}-${index}`})),seed);
-  return {name:profile.name||name||'Mage Knight',character,q:0,r:0,fame:0,reputation:0,level:1,armor:profile.armor||2,command:1,deck:deck.slice(5),hand:deck.slice(0,5),discard:[],played:[],wounds:0,crystals:{blue:0,red:0,green:0,white:0},units:[],keeps:0,cities:0,skills:[],defeated:[],assaults:0,pvpWins:0};
+  return {name:profile.name||name||'Mage Knight',character,q:0,r:0,fame:0,reputation:0,level:1,armor:profile.armor||2,command:1,deck:deck.slice(5),hand:deck.slice(0,5),discard:[],played:[],removed:[],wounds:0,crystals:{blue:0,red:0,green:0,white:0},units:[],keeps:0,cities:0,skills:[],defeated:[],assaults:0,pvpWins:0,tactic:null,tacticUsed:false,extraTurn:false,carry:null};
 };
 
 export function createGame(seed = 20260901, options = {}) {
   const source = shuffled([...COLORS, 'gold', 'black', ...COLORS], seed + 9).slice(0, 3).map((color, i) => ({ id: `die-${i}`, color, used: false }));
   const character=options.character||'tovak';const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
+  const advancedPool=shuffled(clone(ADVANCED_CARDS),seed+41),spellPool=shuffled(clone(SPELL_CARDS),seed+51),regularUnits=shuffled(clone(UNITS.filter(unit=>!unit.elite)),seed+61),eliteUnits=shuffled(clone(UNITS.filter(unit=>unit.elite)),seed+62);
   const state = {
-    version:4, seed, scenario: 'Solo Conquest', status: 'playing', round: 1, maxRounds:6, time: 'day', turn: 1, phase: options.tactics ? 'tactic' : 'action', tacticsEnabled:Boolean(options.tactics), tactic:null,
+    version:5, seed, scenario: 'Solo Conquest', status: 'playing', round: 1, maxRounds:6, time: 'day', turn: 1, phase: options.tactics ? 'tactic' : 'action', tacticsEnabled:Boolean(options.tactics), tactic:null,
     map:prepareMap(Boolean(options.exploration)), tileDeck:shuffled(MAP_TILES.map(tile=>tile.id),seed+23), exploredTiles:[], explorationEnabled:Boolean(options.exploration), source,
-    offer: { units: clone(UNITS.filter(unit=>!unit.elite)), advanced: clone(ADVANCED_CARDS), spells: clone(SPELL_CARDS) },
-    decks: { artifacts:shuffled(clone(ARTIFACT_CARDS),seed+31), advanced:shuffled(clone(ADVANCED_CARDS),seed+41), spells:shuffled(clone(SPELL_CARDS),seed+51) },
+    offer: { units:regularUnits.splice(0,3),advanced:advancedPool.splice(0,3),spells:spellPool.splice(0,3) },
+    decks: { artifacts:shuffled(clone(ARTIFACT_CARDS),seed+31),advanced:advancedPool,spells:spellPool,regularUnits,eliteUnits },
     player:makePlayer(seed,character),
     skillDeck:shuffled(clone(profile.skills||TOVAK_SKILLS),seed+71), skillChoices:[], commonSkills:[],
     points: freshPoints(), mana: [], sourceTaken: false, combat: null, pendingRewards:[], bonuses:{sideways:null,manaOverload:null}, log: [], error: null,
-    scoring:null,pvp:null,cooperativeAssault:null,
+    scoring:null,pvp:null,cooperativeAssault:null,scenarioEndTurnsRemaining:null,
   };
   log(state, 'Solo Conquest begins. It is Day. Your first hand is ready.');
   return state;
@@ -191,8 +199,10 @@ export function createMultiplayerGame(lobby, seed = 20260901) {
   const state = createGame(seed, { tactics:true,exploration:true });
   const characterNames = {tovak:'Tovak',arythea:'Arythea',goldyx:'Goldyx',norowas:'Norowas',wolfhawk:'Wolfhawk',krang:'Krang',braevalar:'Braevalar'};
   const individualGames = lobby.players.map((member,index)=>createGame(seed+index*997,{character:member.character}));
-  state.version=4;state.multiplayer=true;state.scenario=lobby.scenario;state.maxRounds=lobby.scenario==='blitz-conquest'?4:6;state.phase='tactic';state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;
+  state.version=5;state.multiplayer=true;state.scenario=lobby.scenario;state.maxRounds=lobby.scenario==='blitz-conquest'?4:6;state.phase='tactic';state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=lobby.players.map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];
   state.players=lobby.players.map((member,index)=>({...individualGames[index].player,id:member.id,playerName:member.name,character:member.character,name:characterNames[member.character]||member.name,connected:true,tactic:null}));
+  const garrisonPool=[ENEMIES.city,ENEMIES.guards,ENEMIES.mage,ENEMIES.gargoyles,ENEMIES.dragon];state.map.filter(hex=>hex.site==='city').forEach((hex,index)=>{hex.level=Math.min(11,4+lobby.players.length);const count=Math.max(2,Math.min(4,Math.ceil(hex.level/3)));hex.enemies=Array.from({length:count},(_,slot)=>({...clone(garrisonPool[(index+slot)%garrisonPool.length]),uid:`city-${index}-${slot}`}));hex.enemy=enemyGroup(hex.enemies);});const spawning=state.map.find(hex=>hex.site==='spawning-grounds');if(spawning){spawning.enemies=[{...clone(ENEMIES.den),uid:'spawn-den'},{...clone(ENEMIES.golem),uid:'spawn-golem'}];spawning.enemy=enemyGroup(spawning.enemies);}
+  while(state.offer.units.length<lobby.players.length+2&&state.decks.regularUnits.length)state.offer.units.push(state.decks.regularUnits.shift());
   state.playerResources=Object.fromEntries(lobby.players.map((member,index)=>[member.id,{skillDeck:individualGames[index].skillDeck,skillChoices:[],commonSkills:[],bonuses:{sideways:null,manaOverload:null},pendingRewards:[]}]))
   bindPlayerState(state,state.players[0].id);state.log=[];log(state,`${state.players.length}-player ${lobby.scenario.replaceAll('-',' ')} begins. Choose Day tactics.`);return state;
 }
@@ -205,7 +215,7 @@ function bindPlayerState(state,playerId){
 }
 
 export function gameViewForPlayer(input,playerId){
-  if(!input)return null;const state=clone(input);if(!state.multiplayer)return state;
+  if(!input)return null;const state=migrateState(clone(input));if(!state.multiplayer)return state;
   const own=bindPlayerState(state,playerId);if(!own)return null;
   state.viewerPlayerId=playerId;state.players=state.players.map(player=>player.id===playerId?player:{...player,handCount:player.hand.length,deckCount:player.deck.length,discardCount:player.discard.length,hand:[],deck:[],discard:[],played:[]});
   state.player=state.players.find(player=>player.id===playerId);if(playerId!==state.activePlayerId)state.points=freshPoints();delete state.playerResources;return state;
@@ -248,6 +258,7 @@ function spendMana(state, color) {
   if (state.player.crystals[color] > 0) { state.player.crystals[color]--; return true; }
   return false;
 }
+const canSpendMana=(state,color)=>state.mana.includes(color)||(state.time==='day'&&state.mana.includes('gold'))||(state.player.crystals[color]||0)>0;
 function gainFame(state, amount) {
   const old = state.player.level; state.player.fame += amount; state.player.level = levelFor(state.player.fame);
   for(let level=old+1;level<=state.player.level;level++) {
@@ -274,14 +285,16 @@ export function calculateScore(state){
   const players=state.multiplayer?state.players:[state.player];
   const rows=players.map(player=>{
     const cards=[...player.deck,...player.hand,...player.discard,...player.played];
-    const categories={knowledge:cards.filter(card=>card.type==='spell'||card.type==='advanced').length*2,loot:cards.filter(card=>card.type==='artifact').length*2,leadership:player.units.reduce((sum,unit)=>sum+unit.level,0),conquest:(player.keeps||0)*2+(player.cities||0)*4+(player.assaults||0)*2,adventure:(player.defeated||[]).filter(enemy=>['dragon','tomb','den','spawn'].includes(enemy.id)).length*2,wounds:-(player.wounds||0)*2,pvp:(player.pvpWins||0)*3};
-    return {playerId:player.id,name:player.playerName||player.name,fame:player.fame,categories,total:player.fame+Object.values(categories).reduce((sum,value)=>sum+value,0)};
-  }).sort((a,b)=>b.total-a.total);
+    const categories={knowledge:cards.filter(card=>card.type==='spell'||card.type==='advanced').length*2,loot:cards.filter(card=>card.type==='artifact').length*2+Math.floor(Object.values(player.crystals||{}).reduce((sum,value)=>sum+value,0)/2),leadership:player.units.reduce((sum,unit)=>sum+(unit.level||0),0),conquest:(player.keeps||0)*2+(player.cities||0)*4+(player.assaults||0)*2,adventure:(player.defeated||[]).filter(enemy=>['dragon','tomb','den','spawn','highDragon','cryptWorm'].includes(enemy.id)).length*2,wounds:-(player.wounds||0)*2,pvp:(player.pvpWins||0)*3,achievements:0};
+    return {playerId:player.id,name:player.playerName||player.name,fame:player.fame,categories,total:0};
+  });
+  if(state.multiplayer&&state.scenario!=='cooperative-conquest')for(const category of ['knowledge','loot','leadership','conquest','adventure']){const ranked=[...rows].sort((a,b)=>b.categories[category]-a.categories[category]);if(ranked[0]?.categories[category]>0)ranked[0].categories.achievements+=3;if(ranked[1]?.categories[category]>0&&ranked[1].categories[category]<ranked[0].categories[category])ranked[1].categories.achievements+=1;}
+  rows.forEach(row=>{row.total=row.fame+Object.values(row.categories).reduce((sum,value)=>sum+value,0);});rows.sort((a,b)=>b.total-a.total);
   return {players:rows,teamTotal:rows.reduce((sum,row)=>sum+row.total,0),winner:rows[0]?.playerId||null};
 }
 
 export function reduceGame(input, action) {
-  const state = clone(input); state.error = null;
+  const state = migrateState(clone(input)); state.error = null;
   if(action.type==='CLEAR_ERROR')return state;
   if (state.status !== 'playing' && action.type !== 'NEW_GAME') return fail(state, 'This game has ended.');
   if (action.type === 'NEW_GAME') return createGame(action.seed || Date.now());
@@ -298,13 +311,15 @@ export function reduceGame(input, action) {
       if(state.phase!=='tactic'||!state.tacticsEnabled)return fail(state,'Tactics are chosen only at the start of a round.');
       const tactic=TACTICS[state.time].find(item=>item.id===action.id);if(!tactic)return fail(state,`That is not a ${state.time} tactic.`);
       if(state.multiplayer){
+        if(action.playerId!==state.tacticPickerId)return fail(state,'Players choose tactics from lowest Fame upward. Wait for your pick.');
         if(state.tacticSelections[action.playerId])return fail(state,'You already chose a tactic this round.');
         if(Object.values(state.tacticSelections).some(selection=>selection.id===tactic.id))return fail(state,'Another player already chose that tactic.');
-        state.tacticSelections[action.playerId]=clone(tactic);state.player.tactic=clone(tactic);log(state,`${state.player.name} chose ${tactic.name} (initiative ${tactic.number}).`);
-        if(Object.keys(state.tacticSelections).length===state.players.length){state.turnOrder=state.players.map(player=>player.id).sort((a,b)=>state.tacticSelections[a].number-state.tacticSelections[b].number);state.activePlayerId=state.turnOrder[0];bindPlayerState(state,state.activePlayerId);state.phase='action';log(state,`${state.player.name} has the first turn.`);}return state;
+        state.tacticSelections[action.playerId]=clone(tactic);state.player.tactic=clone(tactic);state.player.tacticUsed=false;applyTacticOnTake(state,tactic);log(state,`${state.player.name} chose ${tactic.name} (initiative ${tactic.number}).`);
+        if(Object.keys(state.tacticSelections).length===state.players.length){state.turnOrder=state.players.map(player=>player.id).sort((a,b)=>state.tacticSelections[a].number-state.tacticSelections[b].number);state.activePlayerId=state.turnOrder[0];state.tacticPickerId=null;bindPlayerState(state,state.activePlayerId);state.phase='action';log(state,`${state.player.name} has the first turn.`);}else state.tacticPickerId=state.tacticPickOrder.find(id=>!state.tacticSelections[id]);return state;
       }
-      state.tactic=clone(tactic);state.phase='action';log(state,`${state.player.name} chose ${tactic.name} (initiative ${tactic.number}).`);return state;
+      state.tactic=clone(tactic);state.player.tactic=clone(tactic);state.player.tacticUsed=false;applyTacticOnTake(state,tactic);state.phase='action';log(state,`${state.player.name} chose ${tactic.name} (initiative ${tactic.number}).`);return state;
     }
+    case 'USE_TACTIC': return activateTactic(state,action);
     case 'SELECT_SKILL': {
       const skill=state.skillChoices.find(s=>s.id===action.id); if(!skill)return fail(state,'That Skill is not currently offered.');
       state.player.skills.push({...skill,used:false}); state.commonSkills.push(...state.skillChoices.filter(s=>s.id!==action.id)); state.skillChoices.splice(0);
@@ -331,15 +346,17 @@ export function reduceGame(input, action) {
         const offeredStats = Array.isArray(offered) ? offered : [offered];
         if (!offeredStats.some(k => combatStat.includes(k))) return fail(state, `Only ${combatStat.join(' or ')} effects may be committed in this combat phase.`);
       }
-      if (action.mode === 'strong' && !spendMana(state, card.color)) return fail(state, `The strong action requires ${card.color} mana.`);
+      if(card.type==='spell'){
+        if(action.mode==='sideways'){}else if(action.mode==='basic'){if(!canSpendMana(state,card.color))return fail(state,`Casting this Spell requires ${card.color} mana.`);spendMana(state,card.color);}else if(action.mode==='strong'){if(state.time!=='night')return fail(state,'The strong Spell effect can only be cast at Night.');if(!canSpendMana(state,card.color)||!state.mana.includes('black'))return fail(state,`The strong Spell requires ${card.color} and black mana.`);spendMana(state,card.color);state.mana.splice(state.mana.indexOf('black'),1);}else return fail(state,'Choose a Spell effect.');
+      } else if(card.type!=='artifact'&&action.mode==='strong'&&!spendMana(state,card.color))return fail(state,`The strong action requires ${card.color} mana.`);
       if (action.mode === 'sideways' && !['move','influence','attack','block'].includes(action.as)) return fail(state, 'A sideways card provides Move, Influence, Attack, or Block 1.');
       if(action.mode==='sideways'&&state.bonuses.sideways?.advancedValue&&['advanced','spell','artifact'].includes(card.type))state.bonuses.sideways.value=state.bonuses.sideways.advancedValue;
       addEffect(state, card[action.mode] || {}, action.mode === 'sideways' ? action.as : null);
       if(action.mode==='strong'&&state.bonuses.manaOverload?.color===card.color){const stat=['move','influence','attack','block'].find(k=>(card.strong||{})[k]);if(stat){state.points[stat]+=4;log(state,`Mana Overload adds ${stat} 4.`);}state.bonuses.manaOverload=null;}
-      state.player.played.push(state.player.hand.splice(index,1)[0]); log(state, `${card.name}: ${action.mode}${action.as ? ` as ${action.as}` : ''}.`); return state;
+      const committed=state.player.hand.splice(index,1)[0];if(card.type==='artifact'&&action.mode==='strong')state.player.removed.push(committed);else state.player.played.push(committed); log(state, `${card.name}: ${action.mode}${action.as ? ` as ${action.as}` : ''}.`); return state;
     }
     case 'USE_UNIT': {
-      const unit = state.player.units.find(u => u.id === action.id); if (!unit || unit.spent) return fail(state, 'That unit is unavailable.');
+      const unit = state.player.units.find(u => u.id === action.id); if (!unit || unit.spent||unit.wounded) return fail(state, 'That unit is unavailable or wounded.');
       if(state.combat && SITES[state.map.find(h=>h.q===state.combat.q&&h.r===state.combat.r)?.site]?.underground)return fail(state,'Units cannot be used in a Dungeon or Tomb.');
       addEffect(state, unit.ability); unit.spent = true; log(state, `${unit.name} activated.`); return state;
     }
@@ -389,7 +406,7 @@ export function reduceGame(input, action) {
         const entryCost=TERRAIN_COST[state.time][hex.terrain]; if(state.points.move<entryCost)return fail(state,`The assault requires ${entryCost} Move to enter that terrain.`);
         state.points.move-=entryCost;state.player.reputation=Math.max(-7,state.player.reputation-1);
       }
-      state.phase='combat-ranged'; state.combat={q:hex.q,r:hex.r,origin,kind,enemy:clone(hex.enemy),blocked:false,woundsTaken:0}; log(state,`Combat begins against ${hex.enemy.name}. Ranged/Siege phase.`); return state;
+      state.phase='combat-ranged'; state.combat={q:hex.q,r:hex.r,origin,kind,enemy:clone(hex.enemy),enemies:clone(hex.enemy.members||hex.enemies||[hex.enemy]),blocked:false,woundsTaken:0,damageUnits:[]}; log(state,`Combat begins against ${hex.enemy.name}. Ranged/Siege phase.`); return state;
     }
     case 'BURN_MONASTERY': {
       const hex=currentHex(state); if(state.phase!=='action'||hex?.site!=='monastery'||hex.burned)return fail(state,'You must be at an unburned monastery.');
@@ -406,12 +423,18 @@ export function reduceGame(input, action) {
     }
     case 'RESOLVE_BLOCK': {
       if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.'); const e=state.combat.enemy;
-      const required=e.attack*(e.traits.includes('swift')?2:1);let efficientBlock=state.points.block+state.points.iceBlock+state.points.fireBlock;
+      const required=(e.members||[e]).reduce((sum,enemy)=>sum+enemy.attack*(enemy.traits.includes('swift')?2:1),0);let efficientBlock=state.points.block+state.points.iceBlock+state.points.fireBlock;
       if(e.traits.includes('fire'))efficientBlock=state.points.iceBlock+Math.floor((state.points.block+state.points.fireBlock)/2);
       if(e.traits.includes('ice'))efficientBlock=state.points.fireBlock+Math.floor((state.points.block+state.points.iceBlock)/2);
       state.combat.blocked=efficientBlock>=required;
-      if(!state.combat.blocked){ const damage=e.attack*(e.traits.includes('brutal')?2:1); let wounds=Math.max(1,Math.ceil(damage/state.player.armor));if(e.traits.includes('poison'))wounds*=2; wound(state,wounds);if(e.traits.includes('paralyze')){state.player.hand.forEach(card=>state.player.discard.push(card));state.player.hand=[];} state.combat.woundsTaken=wounds; log(state,`Unblocked attack: ${wounds} Wound${wounds===1?'':'s'}${e.traits.includes('paralyze')?' and the hand was discarded':''}.`); }
+      if(!state.combat.blocked){assignCombatDamage(state,e);}
       else log(state,'Attack fully blocked.'); state.phase='combat-attack'; return state;
+    }
+    case 'ASSIGN_DAMAGE_UNIT': {
+      if(state.phase!=='combat-block'||!state.combat)return fail(state,'Damage is assigned during the Block phase.');const unit=state.player.units.find(item=>item.id===action.id);if(!unit||unit.wounded)return fail(state,'Only an unwounded unit can receive damage.');state.combat.damageUnits=state.combat.damageUnits||[];const index=state.combat.damageUnits.indexOf(unit.id);if(index>=0)state.combat.damageUnits.splice(index,1);else state.combat.damageUnits.push(unit.id);return state;
+    }
+    case 'SPEND_HEAL': {
+      if(state.phase!=='action')return fail(state,'Healing power is spent outside combat.');if(action.unitId){const unit=state.player.units.find(item=>item.id===action.unitId);if(!unit?.wounded)return fail(state,'That unit is not wounded.');const cost=unit.level||1;if(state.points.heal<cost)return fail(state,`Healing that unit requires ${cost} Heal.`);state.points.heal-=cost;unit.wounded=false;unit.woundCount=0;log(state,`${unit.name} was healed.`);return state;}if(state.player.wounds<1)return fail(state,'You have no Wound to heal.');if(state.points.heal<1)return fail(state,'You need 1 Heal.');state.points.heal--;state.player.wounds--;removeWounds(state,1);log(state,'Healed one Hero Wound.');return state;
     }
     case 'RESOLVE_ATTACK': {
       if(state.phase!=='combat-attack')return fail(state,'Not in the Attack phase.'); const e=state.combat.enemy;
@@ -432,6 +455,25 @@ export function reduceGame(input, action) {
     }
     default: return fail(state, 'Unknown action.');
   }
+}
+
+function applyTacticOnTake(state,tactic){
+  if(tactic.effect==='draw')draw(state,2);
+  if(tactic.effect==='prepare'&&state.player.deck.length){state.player.hand.push(state.player.deck.shift());}
+}
+
+function activateTactic(state,action){
+  const tactic=state.player.tactic||state.tactic;if(!tactic)return fail(state,'You have no tactic this round.');if(state.player.tacticUsed)return fail(state,`${tactic.name} has already been used.`);if(state.phase!=='action')return fail(state,'Use this tactic during your action phase.');
+  if(tactic.effect==='choice')state.points[action.mode==='influence'?'influence':'move']+=action.mode==='influence'?1:2;
+  else if(tactic.effect==='mana'){const color=state.time==='day'?'gold':action.color;if(state.time==='night'&&!COLORS.includes(color))return fail(state,'Choose a basic mana color.');state.mana.push(color);}
+  else if(tactic.effect==='cycle'){
+    const ids=(action.uids||[]).slice(0,2);let count=0;ids.forEach(uid=>{const index=state.player.hand.findIndex(card=>card.uid===uid&&card.id!=='wound');if(index>=0){state.player.discard.push(state.player.hand.splice(index,1)[0]);count++;}});if(!count)return fail(state,'Choose at least one non-Wound card to cycle.');draw(state,count+(tactic.id==='midnight-meditation'?1:0));
+  } else if(tactic.effect==='long-night'){
+    const cards=state.player.discard.splice(Math.max(0,state.player.discard.length-3));if(!cards.length)return fail(state,'Your discard pile is empty.');state.player.deck=shuffled([...state.player.deck,...cards],state.seed+state.turn*37);
+  } else if(tactic.effect==='extra-turn')state.player.extraTurn=true;
+  else if(tactic.effect==='spare'){state.player.carry={move:Math.min(3,state.points.move),influence:Math.min(3,state.points.influence),attack:Math.min(3,state.points.attack),block:Math.min(3,state.points.block)};}
+  else return fail(state,'This tactic has no activatable effect.');
+  state.player.tacticUsed=true;log(state,`${tactic.name} activated.`);return state;
 }
 
 function activateSkill(state,action){
@@ -480,7 +522,7 @@ function resolveCooperativeAssault(state){
   const ranged=pool.siege+(!enemy.traits.includes('fortified')?pool.ranged:0);let won=ranged>=enemy.armor;
   if(!won){if(pool.block<enemy.attack){const participants=state.players.filter(player=>assault.ready.includes(player.id));participants.forEach(player=>{bindPlayerState(state,player.id);wound(state,Math.max(1,Math.ceil(enemy.attack/(player.armor*participants.length))));});}won=pool.attack>=enemy.armor;}
   bindPlayerState(state,assault.leaderId);if(!won){state.phase='action';state.cooperativeAssault=null;log(state,'The joint city assault failed; the party retreats.');return state;}
-  hex.enemy=null;hex.conquered=true;const participants=state.players.filter(player=>assault.ready.includes(player.id));const share=Math.max(1,Math.floor(enemy.fame/participants.length));participants.forEach(player=>{bindPlayerState(state,player.id);gainFame(state,share);player.assaults=(player.assaults||0)+1;});bindPlayerState(state,assault.leaderId);state.player.q=hex.q;state.player.r=hex.r;state.phase='action';state.cooperativeAssault=null;log(state,`The party conquered the ${hex.cityColor} city together.`);checkVictory(state);return state;
+  hex.enemy=null;hex.conquered=true;hex.ownerId=assault.leaderId;hex.conquerors=[...assault.ready];const participants=state.players.filter(player=>assault.ready.includes(player.id));const share=Math.max(1,Math.floor(enemy.fame/participants.length));participants.forEach(player=>{bindPlayerState(state,player.id);gainFame(state,share);player.assaults=(player.assaults||0)+1;});bindPlayerState(state,assault.leaderId);state.player.q=hex.q;state.player.r=hex.r;state.phase='action';state.cooperativeAssault=null;log(state,`The party conquered the ${hex.cityColor} city together.`);checkVictory(state);return state;
 }
 
 function resolvePvp(state){
@@ -494,15 +536,21 @@ function resolvePvp(state){
   const winner=attackerDamage===defenderDamage?null:attackerDamage>defenderDamage?attacker:defender;if(winner){bindPlayerState(state,winner.id);gainFame(state,2);winner.pvpWins=(winner.pvpWins||0)+1;}bindPlayerState(state,attacker.id);state.pvp=null;state.phase='action';log(state,winner?`${winner.name} won the PvP combat.`:'PvP combat ended in a draw.');return state;
 }
 
+function assignCombatDamage(state,enemy){
+  const attackers=enemy.members||[enemy];let damage=attackers.reduce((sum,item)=>sum+item.attack*(item.traits.includes('brutal')?2:1),0);const attackType=enemy.traits.includes('coldfire')?'coldfire':enemy.traits.includes('fire')?'fire':enemy.traits.includes('ice')?'ice':'physical';
+  for(const id of state.combat.damageUnits||[]){const unit=state.player.units.find(item=>item.id===id);if(!unit||unit.wounded||damage<=0)continue;const resistant=(unit.resistances||[]).includes(attackType);if(resistant){damage=Math.max(0,damage-unit.armor);if(damage<=0)continue;}if(enemy.traits.includes('paralyze')){state.player.units=state.player.units.filter(item=>item.id!==unit.id);log(state,`${unit.name} was destroyed by Paralyze.`);}else{unit.wounded=true;unit.woundCount=enemy.traits.includes('poison')?2:1;log(state,`${unit.name} received ${unit.woundCount} Wound${unit.woundCount===1?'':'s'}.`);}damage=Math.max(0,damage-unit.armor);}
+  let wounds=damage>0?Math.ceil(damage/state.player.armor):0;if(enemy.traits.includes('poison')&&wounds){for(let i=0;i<wounds;i++)state.player.discard.push({id:'wound',uid:`poison-${state.turn}-${i}`,name:'Wound',color:'wound',basic:{},strong:{}});state.player.wounds+=wounds;}if(wounds)wound(state,wounds);if(enemy.traits.includes('paralyze')&&wounds){state.player.hand.filter(card=>card.id!=='wound').forEach(card=>state.player.discard.push(card));state.player.hand=state.player.hand.filter(card=>card.id==='wound');}if(wounds>=handLimit(state)){state.player.hand.filter(card=>card.id!=='wound').forEach(card=>state.player.discard.push(card));state.player.hand=state.player.hand.filter(card=>card.id==='wound');log(state,'The Mage Knight was knocked out.');}state.combat.woundsTaken=wounds;log(state,damage>0?`Unblocked attack assigned ${damage} remaining damage to the Hero.`:'Units absorbed all damage.');
+}
+
 function checkVictory(state){
   const cities=state.map.filter(item=>item.site==='city'),conquered=cities.filter(item=>item.conquered).length;const needed=state.scenario==='cooperative-conquest'?cities.length:Math.min(cities.length,state.multiplayer?Math.max(2,state.players.length):2);
-  if(cities.length&&conquered>=needed){state.status='won';state.scoring=calculateScore(state);log(state,`${conquered} cities have fallen. The conquest is complete!`);return true;}return false;
+  if(cities.length&&conquered>=needed){if(state.multiplayer){if(state.scenarioEndTurnsRemaining===null){state.scenarioEndTurnsRemaining=state.players.length;log(state,`${conquered} cities have fallen. Every player receives a final turn.`);}}else{state.status='won';state.scoring=calculateScore(state);log(state,`${conquered} cities have fallen. The conquest is complete!`);}return true;}return false;
 }
 
 function winCombat(state, phase) {
   const {q,r,enemy,kind}=state.combat; const hex=state.map.find(h=>h.q===q&&h.r===r); hex.enemy=null;
-  gainFame(state,enemy.fame);state.player.defeated=(state.player.defeated||[]).concat({id:enemy.id,name:enemy.name,fame:enemy.fame}); state.phase='action'; state.combat=null;
-  if(kind==='fortified'){state.player.q=q;state.player.r=r;hex.conquered=true;}
+  hex.enemies=[];gainFame(state,enemy.fame);state.player.defeated=(state.player.defeated||[]).concat((enemy.members||[enemy]).map(item=>({id:item.id,name:item.name,fame:item.fame}))); state.phase='action'; state.combat=null;
+  if(kind==='fortified'){state.player.q=q;state.player.r=r;hex.conquered=true;hex.ownerId=state.player.id||state.player.character;}
   if(kind==='adventure'||kind==='burn')hex.conquered=true;
   if(kind==='burn'){hex.burned=true;state.pendingRewards.push({type:'artifact',source:'Burned monastery'});}
   if(hex.site==='keep')state.player.keeps++;
@@ -537,7 +585,7 @@ function interact(state, action) {
   const city=hex.site==='city'&&hex.conquered;const ownedSite=(hex.site==='keep'||hex.site==='mage-tower')&&hex.conquered;
   if(['keep','mage-tower','city'].includes(hex.site)&&!ownedSite&&!city)return fail(state,'This fortified site must be conquered before interaction.');
   if(action.kind==='heal') { const count=action.count||1; if(!['village','monastery'].includes(hex.site))return fail(state,'Healing is not offered here.');const each=hex.site==='monastery'?2:3;const price=count*each;if(state.points.influence<price)return fail(state,`You need ${price} Influence.`); if(state.player.wounds<count)return fail(state,'Not enough Wounds to heal.'); state.points.influence-=price; state.player.wounds-=count;removeWounds(state,count);log(state,`Healed ${count} Wound${count===1?'':'s'}.`); return state; }
-  if(action.kind==='recruit') { const unit=state.offer.units.find(u=>u.id===action.id); if(!unit)return fail(state,'That unit is not in the offer.');const allowed=(city&&hex.cityColor==='white')||unit.sites.includes(hex.site)||(city&&unit.sites.includes('city'));if(!allowed)return fail(state,`${unit.name} cannot be recruited here.`); if(state.player.units.length>=state.player.command)return fail(state,'All command slots are full.'); const modifier=Math.max(-5,Math.min(5,state.player.reputation)); const cost=Math.max(0,unit.cost-modifier); if(state.points.influence<cost)return fail(state,`You need ${cost} Influence after reputation.`); state.points.influence-=cost; state.player.units.push({...unit,spent:false}); state.offer.units=state.offer.units.filter(u=>u.id!==unit.id); log(state,`Recruited ${unit.name}.`); return state; }
+  if(action.kind==='recruit') { const unit=state.offer.units.find(u=>u.id===action.id); if(!unit)return fail(state,'That unit is not in the offer.');const allowed=(city&&hex.cityColor==='white')||unit.sites.includes(hex.site)||(city&&unit.sites.includes('city'));if(!allowed)return fail(state,`${unit.name} cannot be recruited here.`); if(state.player.units.length>=state.player.command)return fail(state,'All command slots are full.'); const modifier=reputationInfluence(state.player.reputation); const cost=Math.max(0,unit.cost-modifier); if(state.points.influence<cost)return fail(state,`You need ${cost} Influence after reputation.`); state.points.influence-=cost; state.player.units.push({...unit,spent:false,wounded:false,woundCount:0}); state.offer.units=state.offer.units.filter(u=>u.id!==unit.id); log(state,`Recruited ${unit.name}.`); return state; }
   if(action.kind==='plunder') { if(hex.site!=='village')return fail(state,'Only villages may be plundered.'); state.player.reputation=Math.max(-7,state.player.reputation-1); draw(state,2); log(state,'Plundered the village: drew two cards and lost 1 Reputation.'); return endTurn(state); }
   if(action.kind==='learn-advanced') {if(!(hex.site==='monastery'||(city&&hex.cityColor==='green')))return fail(state,'Advanced Actions are not taught here.');if(state.points.influence<6)return fail(state,'You need 6 Influence.');const card=state.offer.advanced.find(c=>c.id===action.id)||state.offer.advanced[0];if(!card)return fail(state,'No Advanced Action is available.');state.points.influence-=6;state.player.deck.unshift(cardWithUid(card,state));state.offer.advanced=state.offer.advanced.filter(c=>c.id!==card.id);log(state,`Learned ${card.name}.`);return state;}
   if(action.kind==='learn-spell') {if(!(hex.site==='mage-tower'||(city&&hex.cityColor==='blue')))return fail(state,'Spells are not taught here.');const card=state.offer.spells.find(c=>c.id===action.id);if(!card)return fail(state,'That Spell is not available.');if(state.points.influence<7)return fail(state,'You need 7 Influence.');if(!spendMana(state,card.color))return fail(state,`You also need ${card.color} mana.`);state.points.influence-=7;state.player.deck.unshift(cardWithUid(card,state));state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);log(state,`Learned ${card.name}.`);return state;}
@@ -552,26 +600,35 @@ function removeWounds(state,count){
 
 function endTurn(state,roundAnnouncement=false) {
   const hex=currentHex(state);
+  const immediateExtraTurn=Boolean(state.player.extraTurn);state.player.extraTurn=false;
+  const carry=state.player.carry;state.player.carry=null;
   if(hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
   if(hex?.site==='glade'&&state.player.wounds>0){const before=state.player.hand.length+state.player.discard.length;removeWounds(state,1);if(state.player.hand.length+state.player.discard.length<before){state.player.wounds--;log(state,'The magical glade removed one Wound.');}}
-  state.player.discard.push(...state.player.played); state.player.played=[]; state.points=freshPoints(); state.mana=[]; state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;
+  state.player.discard.push(...state.player.played); state.player.played=[]; state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value); state.mana=[]; state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;
   state.player.units.forEach(u=>u.spent=false);state.player.skills.forEach(s=>s.used=false); const target=handLimit(state); if(state.player.hand.length<target)draw(state,target-state.player.hand.length);
   if(hex?.site==='glade')state.mana.push(state.time==='day'?'gold':'black');
   state.turn++;
   if(state.multiplayer){
+    if(state.scenarioEndTurnsRemaining!==null){state.scenarioEndTurnsRemaining--;if(state.scenarioEndTurnsRemaining<=0){state.status='won';state.scoring=calculateScore(state);log(state,'Final turns are complete. The conquest has ended.');return state;}}
+    if(immediateExtraTurn){log(state,`${state.player.name} takes the extra turn granted by ${state.player.tactic?.name}.`);return state;}
     if(state.roundEndTurnsRemaining!==null&&!roundAnnouncement){state.roundEndTurnsRemaining--;if(state.roundEndTurnsRemaining<=0)return nextRound(state);}
     const currentIndex=state.turnOrder.indexOf(state.activePlayerId);state.activePlayerId=state.turnOrder[(currentIndex+1)%state.turnOrder.length];bindPlayerState(state,state.activePlayerId);state.points=freshPoints();state.mana=[];state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;log(state,`${state.player.name}'s turn begins.`);return state;
   }
   log(state,`Turn ${state.turn} begins.`); return state;
 }
 
+function refreshOffers(state){
+  state.offer.advanced.forEach(card=>state.decks.advanced.push(card));state.offer.spells.forEach(card=>state.decks.spells.push(card));state.offer.advanced=state.decks.advanced.splice(0,Math.min(3,state.decks.advanced.length));state.offer.spells=state.decks.spells.splice(0,Math.min(3,state.decks.spells.length));
+  state.offer.units.forEach(unit=>state.decks[unit.elite?'eliteUnits':'regularUnits'].push(unit));state.offer.units=[];const count=(state.multiplayer?state.players.length:1)+2,coreRevealed=state.map.some(hex=>hex.core&&hex.revealed!==false);for(let index=0;index<count;index++){const primary=coreRevealed&&index%2===0?'eliteUnits':'regularUnits',secondary=primary==='eliteUnits'?'regularUnits':'eliteUnits';const unit=state.decks[primary].shift()||state.decks[secondary].shift();if(unit)state.offer.units.push(unit);}
+}
+
 function nextRound(state) {
   if(state.round>=(state.maxRounds||6)){state.status='lost';state.scoring=calculateScore(state);log(state,'The final Night ends before the cities are conquered. Final scoring is complete.');return state;}
-  state.round++; state.time=state.time==='day'?'night':'day';
+  state.round++; state.time=state.time==='day'?'night':'day';refreshOffers(state);
   if(state.multiplayer){
-    state.players.forEach((player,index)=>{bindPlayerState(state,player.id);player.deck=shuffled([...player.discard,...player.hand],state.seed+state.round+index*997);player.hand=[];player.discard=[];draw(state,handLimit(state));player.units.forEach(unit=>unit.spent=false);player.skills.forEach(skill=>{skill.used=false;skill.roundUsed=false;});player.tactic=null;});
-    state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;bindPlayerState(state,state.players[0].id);
-  } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];draw(state,handLimit(state));state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
+    state.players.forEach((player,index)=>{bindPlayerState(state,player.id);player.deck=shuffled([...player.discard,...player.hand],state.seed+state.round+index*997);player.hand=[];player.discard=[];player.tactic=null;player.tacticUsed=false;draw(state,handLimit(state));player.units.forEach(unit=>unit.spent=false);player.skills.forEach(skill=>{skill.used=false;skill.roundUsed=false;});});
+    state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=[...state.players].sort((a,b)=>a.fame-b.fame||state.players.indexOf(a)-state.players.indexOf(b)).map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];bindPlayerState(state,state.players[0].id);
+  } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];state.player.tactic=null;state.player.tacticUsed=false;draw(state,handLimit(state));state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
   state.map.forEach(h=>h.used=false); state.source=shuffled([...COLORS,state.time==='day'?'gold':'black'],state.seed+state.round).slice(0,3).map((color,i)=>({id:`die-${i}`,color})); state.points=freshPoints();state.turn++;state.mana=[];state.sourceTaken=false;state.tactic=null;if(state.tacticsEnabled)state.phase='tactic';
   log(state,`${state.time==='day'?'Day':'Night'} ${Math.ceil(state.round/2)} begins.`); return state;
 }
