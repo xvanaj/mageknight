@@ -151,7 +151,7 @@ export const CONTENT_COUNTS={advancedActions:ADVANCED_CARDS.length,spells:SPELL_
 const clone = value => JSON.parse(JSON.stringify(value));
 const migrateState=state=>{
   const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
-  state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
+  state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.enemyDiscards=state.enemyDiscards||{};state.enemyDiscards.brown=state.enemyDiscards.brown||[];state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
 };
 const enemyGroup=members=>{const list=members.map(clone);return {id:list.map(enemy=>enemy.id).join('+'),uid:list.map(enemy=>enemy.uid||enemy.id).join('|'),name:list.length>1?`${list.length} defenders`:list[0].name,armor:list.reduce((sum,enemy)=>sum+enemy.armor,0),attack:list.reduce((sum,enemy)=>sum+enemy.attack,0),fame:list.reduce((sum,enemy)=>sum+enemy.fame,0),traits:[...new Set(list.flatMap(enemy=>enemy.traits||[]))],members:list};};
 const enemyKey=enemy=>enemy.uid||enemy.id;
@@ -160,6 +160,8 @@ const chosenCombatEnemies=(state,ids)=>{const living=livingCombatEnemies(state);
 const markCombatDefeated=(state,enemies)=>{state.combat.defeatedIds=state.combat.defeatedIds||[];for(const enemy of enemies){const id=enemyKey(enemy);if(!state.combat.defeatedIds.includes(id))state.combat.defeatedIds.push(id);}};
 const spendCombatPoints=(state,keys)=>keys.forEach(key=>{state.points[key]=0;});
 const effectiveBlock=(state,enemy)=>{const traits=enemy.traits||[];const physical=state.points.block,ice=state.points.iceBlock,fire=state.points.fireBlock;if(traits.includes('coldfire'))return Math.floor((physical+ice+fire)/2);if(traits.includes('fire'))return ice+Math.floor((physical+fire)/2);if(traits.includes('ice'))return fire+Math.floor((physical+ice)/2);return physical+ice+fire;};
+const blockEnemyKey=enemy=>enemy.summonerId||enemyKey(enemy);
+const attackingCombatEnemies=state=>state.combat?.blockEnemies||livingCombatEnemies(state);
 const distance = (a, b) => (Math.abs(a.q-b.q) + Math.abs(a.r-b.r) + Math.abs((-a.q-a.r)-(-b.q-b.r))) / 2;
 const shuffled = (items, seed) => {
   const result = [...items]; let x = seed >>> 0;
@@ -203,7 +205,7 @@ export function createGame(seed = 20260901, options = {}) {
   const advancedPool=shuffled(clone(ADVANCED_CARDS),seed+41),spellPool=shuffled(clone(SPELL_CARDS),seed+51),regularUnits=shuffled(clone(UNITS.filter(unit=>!unit.elite)),seed+61),eliteUnits=shuffled(clone(UNITS.filter(unit=>unit.elite)),seed+62);
   const state = {
     version:5, seed, scenario: 'Solo Conquest', status: 'playing', round: 1, maxRounds:6, time: 'day', turn: 1, phase: options.tactics ? 'tactic' : 'action', tacticsEnabled:Boolean(options.tactics), tactic:null,
-    map:prepareMap(Boolean(options.exploration)), tileDeck:shuffled(MAP_TILES.map(tile=>tile.id),seed+23), exploredTiles:[], enemyDecks:createEnemyDecks(seed),explorationEnabled:Boolean(options.exploration), source,
+    map:prepareMap(Boolean(options.exploration)), tileDeck:shuffled(MAP_TILES.map(tile=>tile.id),seed+23), exploredTiles:[], enemyDecks:createEnemyDecks(seed),enemyDiscards:{brown:[]},explorationEnabled:Boolean(options.exploration), source,
     offer: { units:regularUnits.splice(0,3),advanced:advancedPool.splice(0,3),spells:spellPool.splice(0,3),monastery:[] },
     decks: { artifacts:shuffled(clone(ARTIFACT_CARDS),seed+31),advanced:advancedPool,spells:spellPool,regularUnits,eliteUnits },
     player:makePlayer(seed,character),
@@ -455,11 +457,11 @@ export function reduceGame(input, action) {
     }
     case 'FINISH_RANGED': if(state.phase!=='combat-ranged')return fail(state,'Not in the Ranged/Siege phase.');return finishRangedPhase(state);
     case 'BLOCK_ENEMY': {
-      if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');const enemy=livingCombatEnemies(state).find(item=>enemyKey(item)===action.targetId);if(!enemy)return fail(state,'Choose one living enemy attack.');if((state.combat.blockedIds||[]).includes(enemyKey(enemy)))return fail(state,'That attack is already blocked.');
-      const required=enemy.attack*((enemy.traits||[]).includes('swift')?2:1),power=effectiveBlock(state,enemy);spendCombatPoints(state,['block','iceBlock','fireBlock']);if(power<required)return fail(state,`That block failed: ${required} was required, but only ${power} was committed.`);state.combat.blockedIds.push(enemyKey(enemy));log(state,`${enemy.name}'s attack was blocked separately.`);return state;
+      if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');const enemy=attackingCombatEnemies(state).find(item=>enemyKey(item)===action.targetId);if(!enemy)return fail(state,'Choose one living enemy attack.');if((state.combat.blockedIds||[]).includes(blockEnemyKey(enemy)))return fail(state,'That attack is already blocked.');
+      const required=enemy.attack*((enemy.traits||[]).includes('swift')?2:1),power=effectiveBlock(state,enemy);spendCombatPoints(state,['block','iceBlock','fireBlock']);if(power<required)return fail(state,`That block failed: ${required} was required, but only ${power} was committed.`);state.combat.blockedIds.push(blockEnemyKey(enemy));log(state,`${enemy.name}'s attack was blocked separately.`);return state;
     }
     case 'RESOLVE_BLOCK': {
-      if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');const enemies=livingCombatEnemies(state);if(enemies.length!==1)return fail(state,'Multiple enemy attacks must be blocked separately.');const enemy=enemies[0],required=enemy.attack*((enemy.traits||[]).includes('swift')?2:1),power=effectiveBlock(state,enemy);spendCombatPoints(state,['block','iceBlock','fireBlock']);state.combat.blocked=power>=required;if(state.combat.blocked){state.combat.blockedIds.push(enemyKey(enemy));log(state,'Attack fully blocked.');}return finishBlockPhase(state);
+      if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');const enemies=attackingCombatEnemies(state);if(enemies.length!==1)return fail(state,'Multiple enemy attacks must be blocked separately.');const enemy=enemies[0],required=enemy.attack*((enemy.traits||[]).includes('swift')?2:1),power=effectiveBlock(state,enemy);spendCombatPoints(state,['block','iceBlock','fireBlock']);state.combat.blocked=power>=required;if(state.combat.blocked){state.combat.blockedIds.push(blockEnemyKey(enemy));log(state,'Attack fully blocked.');}return finishBlockPhase(state);
     }
     case 'FINISH_BLOCK': if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');return finishBlockPhase(state);
     case 'ASSIGN_DAMAGE_UNIT': {
@@ -571,12 +573,17 @@ function resolvePvp(state){
 }
 
 function finishRangedPhase(state){
-  spendCombatPoints(state,['ranged','siege']);state.phase='combat-block';log(state,'Ranged/Siege attacks are complete. Surviving enemies attack separately.');return state;
+  spendCombatPoints(state,['ranged','siege']);state.combat.blockEnemies=livingCombatEnemies(state).map(enemy=>{
+    if(!(enemy.traits||[]).includes('summon'))return clone(enemy);
+    if(!state.enemyDecks.brown.length&&state.enemyDiscards.brown.length){state.enemyDecks.brown=shuffled(state.enemyDiscards.brown.splice(0),state.seed+state.turn*83);}
+    const summoned=state.enemyDecks.brown.shift()||clone(ENEMIES.den);const token={...clone(summoned),uid:`summon-${state.turn}-${enemyKey(enemy)}-${summoned.uid||summoned.id}`,summonerId:enemyKey(enemy)};log(state,`${enemy.name} summoned ${token.name} for the Block and Damage phases.`);return token;
+  });state.phase='combat-block';log(state,'Ranged/Siege attacks are complete. Surviving enemies attack separately.');return state;
 }
 
 function finishBlockPhase(state){
-  const blocked=new Set(state.combat.blockedIds||[]),unblocked=livingCombatEnemies(state).filter(enemy=>!blocked.has(enemyKey(enemy)));spendCombatPoints(state,['block','iceBlock','fireBlock']);state.combat.blocked=unblocked.length===0;
+  const blocked=new Set(state.combat.blockedIds||[]),attackers=attackingCombatEnemies(state),unblocked=attackers.filter(enemy=>!blocked.has(blockEnemyKey(enemy)));spendCombatPoints(state,['block','iceBlock','fireBlock']);state.combat.blocked=unblocked.length===0;
   for(const enemy of unblocked)assignCombatDamage(state,enemy);
+  for(const enemy of attackers.filter(item=>item.summonerId)){const discarded={...clone(enemy)};delete discarded.summonerId;state.enemyDiscards.brown.push(discarded);}delete state.combat.blockEnemies;
   if(!unblocked.length)log(state,'Every surviving enemy attack was blocked.');state.phase='combat-attack';return state;
 }
 
