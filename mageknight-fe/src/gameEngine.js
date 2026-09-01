@@ -173,10 +173,11 @@ const fail = (state, error) => ({ ...state, error });
 const FAME_LEVELS=[0,3,8,15,24,35,48,63,80,99];
 const levelFor = fame => Math.min(10,FAME_LEVELS.filter(value=>fame>=value).length);
 const reputationInfluence=reputation=>({5:3,4:2,3:2,2:1,1:1,0:0,'-1':-1,'-2':-1,'-3':-2,'-4':-2,'-5':-3,'-6':-5}[reputation]??-99);
+const baseHandLimit=player=>5+Math.floor((player.level-1)/4);
 const handLimit = state => {
   const nearOwnedKeep=state.map.some(h=>h.site==='keep'&&h.conquered&&distance(state.player,h)<=1);
   const nearCity=state.map.some(h=>h.site==='city'&&h.conquered&&distance(state.player,h)<=1);
-  const printedLimit=5+Math.floor((state.player.level-1)/4);
+  const printedLimit=baseHandLimit(state.player);
   const planning=state.player.tactic?.id==='planning'&&!state.player.tacticUsed?1:0;
   return printedLimit+Math.max(nearOwnedKeep?(state.player.keeps||0):0,nearCity?2:0)+planning;
 };
@@ -472,7 +473,10 @@ export function reduceGame(input, action) {
     }
     case 'FINISH_BLOCK': if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');return finishBlockPhase(state);
     case 'ASSIGN_DAMAGE_UNIT': {
-      if(state.phase!=='combat-block'||!state.combat)return fail(state,'Damage is assigned during the Block phase.');const unit=state.player.units.find(item=>item.id===action.id);if(!unit||unit.wounded)return fail(state,'Only an unwounded unit can receive damage.');state.combat.damageUnits=state.combat.damageUnits||[];const index=state.combat.damageUnits.indexOf(unit.id);if(index>=0)state.combat.damageUnits.splice(index,1);else state.combat.damageUnits.push(unit.id);return state;
+      if(state.phase!=='combat-damage'||!state.combat)return fail(state,'Choose Units while assigning one enemy attack.');const unit=state.player.units.find(item=>item.id===action.id);if(!unit||unit.wounded)return fail(state,'Only an unwounded unit can receive damage.');state.combat.damageUnits=state.combat.damageUnits||[];const index=state.combat.damageUnits.indexOf(unit.id);if(index>=0)state.combat.damageUnits.splice(index,1);else state.combat.damageUnits.push(unit.id);return state;
+    }
+    case 'RESOLVE_DAMAGE': {
+      if(state.phase!=='combat-damage'||!state.combat?.damageQueue?.length)return fail(state,'There is no enemy attack awaiting damage assignment.');const enemy=state.combat.damageQueue.shift();assignCombatDamage(state,enemy);state.combat.damageUnits=[];if(!state.combat.damageQueue.length){discardCombatSummons(state);state.phase='combat-attack';log(state,'All unblocked attacks have been assigned. Melee Attack phase.');}return state;
     }
     case 'SPEND_HEAL': {
       if(state.phase!=='action')return fail(state,'Healing power is spent outside combat.');if(action.unitId){const unit=state.player.units.find(item=>item.id===action.unitId);if(!unit?.wounded)return fail(state,'That unit is not wounded.');const cost=unit.level||1;if(state.points.heal<cost)return fail(state,`Healing that unit requires ${cost} Heal.`);state.points.heal-=cost;unit.wounded=false;unit.woundCount=0;log(state,`${unit.name} was healed.`);return state;}if(state.player.wounds<1)return fail(state,'You have no Wound to heal.');if(state.points.heal<1)return fail(state,'You need 1 Heal.');state.points.heal--;state.player.wounds--;removeWounds(state,1);log(state,'Healed one Hero Wound.');return state;
@@ -589,9 +593,12 @@ function finishRangedPhase(state){
 
 function finishBlockPhase(state){
   const blocked=new Set(state.combat.blockedIds||[]),attackers=attackingCombatEnemies(state),unblocked=attackers.filter(enemy=>!blocked.has(blockEnemyKey(enemy)));spendCombatPoints(state,['block','iceBlock','fireBlock']);state.combat.blocked=unblocked.length===0;
-  for(const enemy of unblocked)assignCombatDamage(state,enemy);
-  for(const enemy of attackers.filter(item=>item.summonerId)){const discarded={...clone(enemy)};delete discarded.summonerId;state.enemyDiscards.brown.push(discarded);}delete state.combat.blockEnemies;
-  if(!unblocked.length)log(state,'Every surviving enemy attack was blocked.');state.phase='combat-attack';return state;
+  if(unblocked.length){state.combat.damageQueue=clone(unblocked);state.combat.damageUnits=[];state.phase='combat-damage';log(state,`${unblocked.length} unblocked attack${unblocked.length===1?'':'s'} must be assigned one at a time.`);return state;}
+  discardCombatSummons(state);log(state,'Every surviving enemy attack was blocked.');state.phase='combat-attack';return state;
+}
+
+function discardCombatSummons(state){
+  for(const enemy of (state.combat.blockEnemies||[]).filter(item=>item.summonerId)){const discarded={...clone(enemy)};delete discarded.summonerId;state.enemyDiscards.brown.push(discarded);}delete state.combat.blockEnemies;delete state.combat.damageQueue;
 }
 
 function leaveCombatWithSurvivors(state){
@@ -604,7 +611,7 @@ function leaveCombatWithSurvivors(state){
 function assignCombatDamage(state,enemy){
   const attackers=enemy.members||[enemy];let damage=attackers.reduce((sum,item)=>sum+item.attack*(item.traits.includes('brutal')?2:1),0);const attackType=enemy.traits.includes('coldfire')?'coldfire':enemy.traits.includes('fire')?'fire':enemy.traits.includes('ice')?'ice':'physical';
   for(const id of state.combat.damageUnits||[]){const unit=state.player.units.find(item=>item.id===id);if(!unit||unit.wounded||damage<=0)continue;const resistant=(unit.resistances||[]).includes(attackType);if(resistant){damage=Math.max(0,damage-unit.armor);if(damage<=0)continue;}if(enemy.traits.includes('paralyze')){state.player.units=state.player.units.filter(item=>item.id!==unit.id);log(state,`${unit.name} was destroyed by Paralyze.`);}else{unit.wounded=true;unit.woundCount=enemy.traits.includes('poison')?2:1;log(state,`${unit.name} received ${unit.woundCount} Wound${unit.woundCount===1?'':'s'}.`);}damage=Math.max(0,damage-unit.armor);}
-  let wounds=damage>0?Math.ceil(damage/state.player.armor):0;if(enemy.traits.includes('poison')&&wounds){for(let i=0;i<wounds;i++)state.player.discard.push({id:'wound',uid:`poison-${state.turn}-${i}`,name:'Wound',color:'wound',basic:{},strong:{}});state.player.wounds+=wounds;}if(wounds)wound(state,wounds);if(enemy.traits.includes('paralyze')&&wounds){state.player.hand.filter(card=>card.id!=='wound').forEach(card=>state.player.discard.push(card));state.player.hand=state.player.hand.filter(card=>card.id==='wound');}if(wounds>=handLimit(state)){state.player.hand.filter(card=>card.id!=='wound').forEach(card=>state.player.discard.push(card));state.player.hand=state.player.hand.filter(card=>card.id==='wound');log(state,'The Mage Knight was knocked out.');}state.combat.woundsTaken=wounds;log(state,damage>0?`Unblocked attack assigned ${damage} remaining damage to the Hero.`:'Units absorbed all damage.');
+  let wounds=damage>0?Math.ceil(damage/state.player.armor):0;if(enemy.traits.includes('poison')&&wounds){for(let i=0;i<wounds;i++)state.player.discard.push({id:'wound',uid:`poison-${state.turn}-${i}`,name:'Wound',color:'wound',basic:{},strong:{}});state.player.wounds+=wounds;}if(wounds)wound(state,wounds);state.combat.woundsTaken=(state.combat.woundsTaken||0)+wounds;if(enemy.traits.includes('paralyze')&&wounds){state.player.hand.filter(card=>card.id!=='wound').forEach(card=>state.player.discard.push(card));state.player.hand=state.player.hand.filter(card=>card.id==='wound');}if(state.combat.woundsTaken>=baseHandLimit(state.player)){state.player.hand.filter(card=>card.id!=='wound').forEach(card=>state.player.discard.push(card));state.player.hand=state.player.hand.filter(card=>card.id==='wound');log(state,'The Mage Knight was knocked out.');}log(state,damage>0?`Unblocked attack assigned ${damage} remaining damage to the Hero.`:'Units absorbed all damage.');
 }
 
 function checkVictory(state){
