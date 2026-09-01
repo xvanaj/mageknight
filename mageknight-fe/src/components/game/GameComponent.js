@@ -34,7 +34,7 @@ function GameComponent({session,onLeaveGame,multiplayerGame,onGameAction,network
 
   return <div className={`game-shell ${waitingForTurn?'not-my-turn':''}`}>
     <header className="topbar">
-      <div className="brand"><span className="brand-mark">MK</span><div><h1>Mage Knight</h1><span>{session?`${session.scenario.replaceAll('-',' ')} · ${session.players.length} players`:'Solo Conquest rules engine'}</span></div></div>
+      <div className="brand"><span className="brand-mark">MK</span><div><h1>Mage Knight</h1><span>{session?`${session.scenario.replaceAll('-',' ')} · ${session.players.length} ${session.players.length===1?'player':'players'}`:'Solo Conquest rules engine'}</span></div></div>
       <div className="round-indicator"><span className={`orb ${game.time}`}>{game.time==='day'?'☀':'☾'}</span><div><b>{game.time} {Math.ceil(game.round/2)}</b><small>Round {game.round} of {game.maxRounds||6} · Turn {game.turn}{game.multiplayer&&game.activePlayerId?` · ${game.players.find(p=>p.id===game.activePlayerId)?.name}`:''}</small></div></div>
       <div className="top-actions">{!game.multiplayer&&<button onClick={save}>Save</button>}<button onClick={()=>setRulesOpen(true)}>Rules</button><button onClick={fresh}>{game.multiplayer?'Leave game':'New game'}</button></div>
     </header>

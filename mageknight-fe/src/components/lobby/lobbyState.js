@@ -9,7 +9,7 @@ export const CHARACTERS = [
 ];
 
 export const SCENARIOS = [
-  { id: 'full-conquest', name: 'Full Conquest', detail: 'The complete 6-round conquest for 2–4 players.' },
+  { id: 'full-conquest', name: 'Full Conquest', detail: 'The complete 6-round conquest for 1–4 players.' },
   { id: 'blitz-conquest', name: 'Blitz Conquest', detail: 'A faster 4-round game with accelerated progression.' },
   { id: 'cooperative-conquest', name: 'Cooperative Conquest', detail: 'Work together to conquer every city before time runs out.' },
 ];
@@ -49,7 +49,7 @@ export function updateLobby(lobby, action) {
   }
 }
 
-export const canStartLobby = lobby => Boolean(lobby && lobby.players.length >= 2 && lobby.players.every(player => player.connected && player.character && player.ready));
+export const canStartLobby = lobby => Boolean(lobby && lobby.players.length >= 1 && lobby.players.every(player => player.connected && player.character && player.ready));
 
 export function makeGameId() {
   const bytes = new Uint8Array(5);

@@ -3,7 +3,16 @@ import { canStartLobby, createLobby, updateLobby } from './lobbyState';
 const host = { id: 'host', name: 'Host' };
 const guest = { id: 'guest', name: 'Guest' };
 
-test('lobby starts only after two connected players choose unique characters and ready up', () => {
+test('a host can start a solo game after choosing a character and readying up', () => {
+  let lobby = createLobby('ABCD1234', host);
+  expect(canStartLobby(lobby)).toBe(false);
+  lobby = updateLobby(lobby, { type: 'SELECT_CHARACTER', playerId: host.id, character: 'tovak' });
+  lobby = updateLobby(lobby, { type: 'SET_READY', playerId: host.id, ready: true });
+  expect(canStartLobby(lobby)).toBe(true);
+  expect(updateLobby(lobby, { type: 'START' }).status).toBe('playing');
+});
+
+test('every connected player must choose a unique character and ready up', () => {
   let lobby = createLobby('ABCD1234', host);
   lobby = updateLobby(lobby, { type: 'JOIN', player: guest });
   lobby = updateLobby(lobby, { type: 'SELECT_CHARACTER', playerId: host.id, character: 'tovak' });

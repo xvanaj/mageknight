@@ -476,7 +476,7 @@ export function reduceGame(input, action) {
     case 'END_TURN': if(state.phase!=='action')return fail(state,'Combat must be completed first.');if(state.pendingRewards.length)return fail(state,'Claim your pending site rewards before ending the turn.'); return endTurn(state);
     case 'END_ROUND': {
       if(state.player.deck.length || state.player.hand.some(c=>c.id!=='wound')) return fail(state,'You may announce end of round only when your Deed deck is empty and you have no playable cards.');
-      if(state.multiplayer){const announcing=state.roundEndTurnsRemaining===null;if(announcing)state.roundEndTurnsRemaining=state.players.length-1;return endTurn(state,announcing);}
+      if(state.multiplayer){if(state.players.length===1)return nextRound(state);const announcing=state.roundEndTurnsRemaining===null;if(announcing)state.roundEndTurnsRemaining=state.players.length-1;return endTurn(state,announcing);}
       return nextRound(state);
     }
     default: return fail(state, 'Unknown action.');
