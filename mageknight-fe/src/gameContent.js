@@ -60,6 +60,13 @@ export const EXTENDED_UNITS = [
   {id:'altem-guardians',name:'Altem Guardians',level:4,cost:11,armor:7,sites:['city'],elite:true,ability:{block:8}},
   {id:'catapults',name:'Catapults',level:3,cost:9,armor:4,sites:['keep','city'],elite:true,ability:{siege:6}},
   {id:'amulet-mages',name:'Amulet Mages',level:3,cost:10,armor:5,sites:['mage-tower','city'],elite:true,ability:{fireAttack:3,iceAttack:3}},
+  {id:'northern-monks',name:'Northern Monks',level:2,cost:7,armor:4,sites:['monastery'],ability:{iceBlock:5}},
+  {id:'savage-monks',name:'Savage Monks',level:2,cost:7,armor:4,sites:['monastery'],ability:{attack:5}},
+  {id:'thugs',name:'Thugs',level:1,cost:4,armor:3,sites:['village','keep'],ability:{influence:3}},
+  {id:'shocktroops',name:'Shocktroops',level:3,cost:9,armor:5,sites:['keep','city'],elite:true,ability:{attack:7}},
+  {id:'heroes',name:'Heroes',level:4,cost:12,armor:7,sites:['city'],elite:true,ability:{attack:5,influence:5}},
+  {id:'ice-golems-unit',name:'Ice Golems',level:3,cost:10,armor:6,sites:['mage-tower','city'],elite:true,resistances:['ice'],ability:{iceBlock:7}},
+  {id:'fire-golems-unit',name:'Fire Golems',level:3,cost:10,armor:6,sites:['mage-tower','city'],elite:true,resistances:['fire'],ability:{fireBlock:7}},
 ];
 
 export const EXTENDED_ACTIONS = [
@@ -69,6 +76,25 @@ export const EXTENDED_ACTIONS = [
   {id:'heroic-tale',name:'Heroic Tale',color:'white',type:'advanced',basic:{influence:4},strong:{influence:6,fame:1}},
   {id:'refreshing-walk-aa',name:'Refreshing Walk',color:'green',type:'advanced',basic:{move:3},strong:{move:5,heal:1}},
   {id:'blood-of-ancients',name:'Blood of Ancients',color:'red',type:'advanced',basic:{attack:3,draw:1},strong:{attack:7,woundCost:1}},
+  {id:'agility',name:'Agility',color:'green',type:'advanced',basic:{move:4},strong:{move:7}},
+  {id:'frost-bridge',name:'Frost Bridge',color:'blue',type:'advanced',basic:{move:3},strong:{move:6}},
+  {id:'ice-bolt',name:'Ice Bolt',color:'blue',type:'advanced',basic:{ranged:3},strong:{iceAttack:5}},
+  {id:'intimidate',name:'Intimidate',color:'red',type:'advanced',basic:{influence:4,reputation:-1},strong:{influence:7,reputation:-2}},
+  {id:'into-the-heat',name:'Into the Heat',color:'red',type:'advanced',basic:{attack:4},strong:{attack:7}},
+  {id:'learning',name:'Learning',color:'blue',type:'advanced',basic:{draw:1},strong:{draw:3}},
+  {id:'mana-storm',name:'Mana Storm',color:'white',type:'advanced',basic:{mana:'token'},strong:{mana:'crystal'}},
+  {id:'maximal-effect',name:'Maximal Effect',color:'red',type:'advanced',basic:{any:2},strong:{any:5}},
+  {id:'regeneration',name:'Regeneration',color:'green',type:'advanced',basic:{heal:2},strong:{heal:4}},
+  {id:'song-of-wind',name:'Song of Wind',color:'green',type:'advanced',basic:{move:4},strong:{move:6}},
+  {id:'swift-bolt',name:'Swift Bolt',color:'white',type:'advanced',basic:{ranged:3},strong:{ranged:5}},
+  {id:'training',name:'Training',color:'white',type:'advanced',basic:{draw:1},strong:{draw:2,fame:1}},
+  {id:'steady-tempo',name:'Steady Tempo',color:'blue',type:'advanced',basic:{move:3},strong:{move:5}},
+  {id:'pure-magic',name:'Pure Magic',color:'white',type:'advanced',basic:{any:2},strong:{any:4}},
+  {id:'crystal-mastery',name:'Crystal Mastery',color:'blue',type:'advanced',basic:{mana:'crystal'},strong:{mana:'crystal',draw:1}},
+  {id:'decompose',name:'Decompose',color:'green',type:'advanced',basic:{heal:2},strong:{heal:3,mana:'crystal'}},
+  {id:'temporal-portal',name:'Temporal Portal',color:'blue',type:'advanced',basic:{move:4},strong:{move:7}},
+  {id:'in-need',name:'In Need',color:'white',type:'advanced',basic:{influence:3,heal:1},strong:{influence:5,heal:2}},
+  {id:'counterattack',name:'Counterattack',color:'red',type:'advanced',basic:{block:3,attack:2},strong:{block:6,attack:4}},
 ];
 
 export const EXTENDED_SPELLS = [
@@ -77,6 +103,18 @@ export const EXTENDED_SPELLS = [
   {id:'call-to-arms',name:'Call to Arms',color:'white',type:'spell',basic:{influence:5},strong:{anyCombat:6}},
   {id:'tremor',name:'Tremor',color:'green',type:'spell',basic:{siege:5},strong:{siege:8}},
   {id:'space-bending',name:'Space Bending',color:'blue',type:'spell',basic:{move:5},strong:{move:8}},
+  {id:'demolish',name:'Demolish',color:'red',type:'spell',basic:{siege:5},strong:{siege:9}},
+  {id:'burning-shield',name:'Burning Shield',color:'red',type:'spell',basic:{fireBlock:6},strong:{fireAttack:8}},
+  {id:'chill',name:'Chill',color:'blue',type:'spell',basic:{iceAttack:5},strong:{iceAttack:9}},
+  {id:'mana-bolt',name:'Mana Bolt',color:'blue',type:'spell',basic:{ranged:5},strong:{siege:8}},
+  {id:'earthquake',name:'Earthquake',color:'green',type:'spell',basic:{siege:5},strong:{attack:9}},
+  {id:'underground-travel',name:'Underground Travel',color:'green',type:'spell',basic:{move:5},strong:{move:9}},
+  {id:'wings-of-wind',name:'Wings of Wind',color:'white',type:'spell',basic:{move:5},strong:{move:8}},
+  {id:'mana-claim',name:'Mana Claim',color:'white',type:'spell',basic:{mana:'crystal'},strong:{mana:'crystal',draw:3}},
+  {id:'energy-flow',name:'Energy Flow',color:'green',type:'spell',basic:{unitReady:1},strong:{anyCombat:7}},
+  {id:'mind-read',name:'Mind Read',color:'white',type:'spell',basic:{influence:5},strong:{influence:9}},
+  {id:'whirlwind',name:'Whirlwind',color:'green',type:'spell',basic:{ranged:5},strong:{siege:8}},
+  {id:'cure',name:'Cure',color:'green',type:'spell',basic:{heal:4},strong:{heal:7}},
 ];
 
 export const EXTENDED_ARTIFACTS = [
@@ -85,6 +123,14 @@ export const EXTENDED_ARTIFACTS = [
   {id:'book-of-wisdom',name:'Book of Wisdom',color:'blue',type:'artifact',basic:{draw:2},strong:{draw:4}},
   {id:'banner-of-courage',name:'Banner of Courage',color:'white',type:'artifact',basic:{block:6},strong:{block:9}},
   {id:'druidic-staff',name:'Druidic Staff',color:'green',type:'artifact',basic:{move:5},strong:{move:8}},
+  {id:'banner-of-fear',name:'Banner of Fear',color:'red',type:'artifact',basic:{influence:5},strong:{attack:8}},
+  {id:'banner-of-protection',name:'Banner of Protection',color:'blue',type:'artifact',basic:{block:6},strong:{iceBlock:9}},
+  {id:'bow-of-stars',name:'Bow of Stars',color:'white',type:'artifact',basic:{ranged:6},strong:{siege:9}},
+  {id:'ring-of-proficiency',name:'Ring of Proficiency',color:'white',type:'artifact',basic:{any:4},strong:{any:8}},
+  {id:'ruby-ring',name:'Ruby Ring',color:'red',type:'artifact',basic:{fireAttack:5},strong:{fireAttack:9}},
+  {id:'sapphire-ring',name:'Sapphire Ring',color:'blue',type:'artifact',basic:{iceAttack:5},strong:{iceAttack:9}},
+  {id:'shield-of-fallen-kings',name:'Shield of Fallen Kings',color:'blue',type:'artifact',basic:{block:7},strong:{block:11}},
+  {id:'emerald-ring',name:'Emerald Ring',color:'green',type:'artifact',basic:{heal:3,move:3},strong:{heal:6,move:6}},
 ];
 
 // Seven-hex clusters. Only the portal tile starts revealed; exploration reveals

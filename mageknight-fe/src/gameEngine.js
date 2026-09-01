@@ -96,6 +96,10 @@ export const ENEMIES = {
   ...EXTENDED_ENEMIES,
 };
 
+const ENEMY_POOLS={
+  orc:['prowlers','diggers','orcTrackers','orcSummoners'],grey:['guards','golem','gargoyles'],violet:['mage','medusa','iceGolems'],brown:['golem','den','cryptWorm','medusa'],red:['tomb','iceDragon','highDragon'],dragon:['dragon','iceDragon','highDragon'],
+};
+
 export const UNITS = [
   { id: 'peasants', name: 'Peasants', level: 1, cost: 4, armor: 3, sites: ['village'], ability: { influence: 2 } },
   { id: 'herbalists', name: 'Herbalists', level: 1, cost: 5, armor: 3, sites: ['village', 'monastery'], ability: { heal: 2 } },
@@ -139,10 +143,12 @@ const ARTIFACT_CARDS = [
   ...EXTENDED_ARTIFACTS,
 ];
 
+export const CONTENT_COUNTS={advancedActions:ADVANCED_CARDS.length,spells:SPELL_CARDS.length,artifacts:ARTIFACT_CARDS.length,units:UNITS.length,characters:Object.keys(CHARACTER_PROFILES).length};
+
 const clone = value => JSON.parse(JSON.stringify(value));
 const migrateState=state=>{
   const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
-  state.decks=state.decks||{};const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat)state.combat.damageUnits=state.combat.damageUnits||[];state.version=5;return state;
+  state.decks=state.decks||{};const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat)state.combat.damageUnits=state.combat.damageUnits||[];state.version=5;return state;
 };
 const enemyGroup=members=>{const list=members.map(clone);return {id:list.map(enemy=>enemy.id).join('+'),uid:list.map(enemy=>enemy.uid||enemy.id).join('|'),name:list.length>1?`${list.length} defenders`:list[0].name,armor:list.reduce((sum,enemy)=>sum+enemy.armor,0),attack:list.reduce((sum,enemy)=>sum+enemy.attack,0),fame:list.reduce((sum,enemy)=>sum+enemy.fame,0),traits:[...new Set(list.flatMap(enemy=>enemy.traits||[]))],members:list};};
 const distance = (a, b) => (Math.abs(a.q-b.q) + Math.abs(a.r-b.r) + Math.abs((-a.q-a.r)-(-b.q-b.r))) / 2;
@@ -167,8 +173,13 @@ const handLimit = state => {
 const tileForHex=(q,r)=>MAP_TILES.find(tile=>tile.hexes.some(hex=>hex[0]===q&&hex[1]===r));
 const prepareMap=exploration=>clone(HEXES).map(hex=>{
   const tile=tileForHex(hex.q,hex.r);
-  return {...hex,tileId:tile?.id||'portal',core:Boolean(tile?.core),revealed:!exploration||!tile};
+  const category=hex.site==='rampaging'?'orc':hex.site==='draconum'?'dragon':hex.site==='keep'?'grey':hex.site==='mage-tower'?'violet':['dungeon','monster-den','spawning-grounds'].includes(hex.site)?'brown':hex.site==='tomb'?'red':null;
+  return {...hex,tileId:tile?.id||'portal',core:Boolean(tile?.core),enemyCategory:category,revealed:!exploration||!tile};
 });
+
+const createEnemyDecks=seed=>Object.fromEntries(Object.entries(ENEMY_POOLS).map(([category,ids],index)=>[category,shuffled(ids.flatMap((id,copy)=>[{...clone(ENEMIES[id]),uid:`${category}-${id}-${copy}`}]),seed+101+index*19)]));
+function revealEnemyTokens(state,tileId){state.map.filter(hex=>hex.tileId===tileId&&hex.enemyCategory&&hex.site!=='spawning-grounds').forEach(hex=>{const deck=state.enemyDecks[hex.enemyCategory];if(deck?.length){const token=deck.shift();hex.enemy={...token,uid:`${hex.q}:${hex.r}:${token.uid}`};hex.enemies=[clone(hex.enemy)];}});}
+function setupRuins(state){const ruins=state.map.find(hex=>hex.site==='ruins');if(!ruins)return;const roll=state.seed%3;if(roll===0){ruins.enemy=null;ruins.ruinsToken={type:'altar',color:COLORS[state.seed%COLORS.length],fame:7};}else if(roll===1)ruins.ruinsToken={type:'enemies',reward:'artifact'};else ruins.ruinsToken={type:'enemies',reward:'crystals',count:4};}
 
 const makePlayer=(seed,character='tovak',name)=>{
   const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
@@ -183,7 +194,7 @@ export function createGame(seed = 20260901, options = {}) {
   const advancedPool=shuffled(clone(ADVANCED_CARDS),seed+41),spellPool=shuffled(clone(SPELL_CARDS),seed+51),regularUnits=shuffled(clone(UNITS.filter(unit=>!unit.elite)),seed+61),eliteUnits=shuffled(clone(UNITS.filter(unit=>unit.elite)),seed+62);
   const state = {
     version:5, seed, scenario: 'Solo Conquest', status: 'playing', round: 1, maxRounds:6, time: 'day', turn: 1, phase: options.tactics ? 'tactic' : 'action', tacticsEnabled:Boolean(options.tactics), tactic:null,
-    map:prepareMap(Boolean(options.exploration)), tileDeck:shuffled(MAP_TILES.map(tile=>tile.id),seed+23), exploredTiles:[], explorationEnabled:Boolean(options.exploration), source,
+    map:prepareMap(Boolean(options.exploration)), tileDeck:shuffled(MAP_TILES.map(tile=>tile.id),seed+23), exploredTiles:[], enemyDecks:createEnemyDecks(seed),explorationEnabled:Boolean(options.exploration), source,
     offer: { units:regularUnits.splice(0,3),advanced:advancedPool.splice(0,3),spells:spellPool.splice(0,3) },
     decks: { artifacts:shuffled(clone(ARTIFACT_CARDS),seed+31),advanced:advancedPool,spells:spellPool,regularUnits,eliteUnits },
     player:makePlayer(seed,character),
@@ -191,6 +202,7 @@ export function createGame(seed = 20260901, options = {}) {
     points: freshPoints(), mana: [], sourceTaken: false, combat: null, pendingRewards:[], bonuses:{sideways:null,manaOverload:null}, log: [], error: null,
     scoring:null,pvp:null,cooperativeAssault:null,scenarioEndTurnsRemaining:null,
   };
+  setupRuins(state);
   log(state, 'Solo Conquest begins. It is Day. Your first hand is ready.');
   return state;
 }
@@ -201,6 +213,7 @@ export function createMultiplayerGame(lobby, seed = 20260901) {
   const individualGames = lobby.players.map((member,index)=>createGame(seed+index*997,{character:member.character}));
   state.version=5;state.multiplayer=true;state.scenario=lobby.scenario;state.maxRounds=lobby.scenario==='blitz-conquest'?4:6;state.phase='tactic';state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=lobby.players.map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];
   state.players=lobby.players.map((member,index)=>({...individualGames[index].player,id:member.id,playerName:member.name,character:member.character,name:characterNames[member.character]||member.name,connected:true,tactic:null}));
+  state.source=shuffled([...COLORS,'gold',...COLORS],seed+9).slice(0,lobby.players.length+2).map((color,index)=>({id:`die-${index}`,color,used:false}));
   const garrisonPool=[ENEMIES.city,ENEMIES.guards,ENEMIES.mage,ENEMIES.gargoyles,ENEMIES.dragon];state.map.filter(hex=>hex.site==='city').forEach((hex,index)=>{hex.level=Math.min(11,4+lobby.players.length);const count=Math.max(2,Math.min(4,Math.ceil(hex.level/3)));hex.enemies=Array.from({length:count},(_,slot)=>({...clone(garrisonPool[(index+slot)%garrisonPool.length]),uid:`city-${index}-${slot}`}));hex.enemy=enemyGroup(hex.enemies);});const spawning=state.map.find(hex=>hex.site==='spawning-grounds');if(spawning){spawning.enemies=[{...clone(ENEMIES.den),uid:'spawn-den'},{...clone(ENEMIES.golem),uid:'spawn-golem'}];spawning.enemy=enemyGroup(spawning.enemies);}
   while(state.offer.units.length<lobby.players.length+2&&state.decks.regularUnits.length)state.offer.units.push(state.decks.regularUnits.shift());
   state.playerResources=Object.fromEntries(lobby.players.map((member,index)=>[member.id,{skillDeck:individualGames[index].skillDeck,skillChoices:[],commonSkills:[],bonuses:{sideways:null,manaOverload:null},pendingRewards:[]}]))
@@ -272,9 +285,11 @@ function wound(state, count) { state.player.wounds += count; for (let i=0;i<coun
 export function legalMoves(state) {
   if(state.multiplayer&&state.viewerPlayerId&&state.viewerPlayerId!==state.activePlayerId)return [];
   if (state.phase !== 'action') return [];
-  return state.map.filter(h => h.revealed!==false&&distance(state.player, h) === 1 && (!h.enemy || SITES[h.site]?.kind==='adventure') && Number.isFinite(TERRAIN_COST[state.time][h.terrain]))
+  return state.map.filter(h => h.revealed!==false&&distance(state.player, h) === 1 && (!h.enemy || SITES[h.site]?.kind==='adventure')&&!isOccupiedByOpponent(state,h)&&Number.isFinite(TERRAIN_COST[state.time][h.terrain]))
     .map(h => ({ ...h, cost: TERRAIN_COST[state.time][h.terrain], legal: state.points.move >= TERRAIN_COST[state.time][h.terrain] }));
 }
+const isOccupiedByOpponent=(state,hex)=>Boolean(state.multiplayer&&hex.site!=='portal'&&state.players.some(player=>player.id!==state.player.id&&player.q===hex.q&&player.r===hex.r));
+const provokingEnemies=(state,destination)=>state.map.filter(hex=>hex.revealed!==false&&hex.enemy&&['rampaging','draconum'].includes(hex.site)&&distance(state.player,hex)===1&&distance(destination,hex)===1);
 
 export function legalExplorations(state){
   if(!state.explorationEnabled||state.phase!=='action')return [];
@@ -301,7 +316,7 @@ export function reduceGame(input, action) {
   if(state.multiplayer){
     const actorId=action.playerId;
     if(!actorId||!state.players.some(player=>player.id===actorId))return fail(state,'Unknown multiplayer actor.');
-    if(['TEAM_CONTRIBUTE','PVP_DEFEND'].includes(action.type))return contributeRemote(state,action);
+    if(['TEAM_CONTRIBUTE','PVP_DEFEND','PVP_RETREAT'].includes(action.type))return contributeRemote(state,action);
     if(state.phase==='tactic'&&action.type!=='SELECT_TACTIC')return fail(state,'Every player must choose a tactic first.');
     if(state.phase!=='tactic'&&actorId!==state.activePlayerId)return fail(state,'It is not your turn.');
     bindPlayerState(state,actorId);
@@ -355,6 +370,9 @@ export function reduceGame(input, action) {
       if(action.mode==='strong'&&state.bonuses.manaOverload?.color===card.color){const stat=['move','influence','attack','block'].find(k=>(card.strong||{})[k]);if(stat){state.points[stat]+=4;log(state,`Mana Overload adds ${stat} 4.`);}state.bonuses.manaOverload=null;}
       const committed=state.player.hand.splice(index,1)[0];if(card.type==='artifact'&&action.mode==='strong')state.player.removed.push(committed);else state.player.played.push(committed); log(state, `${card.name}: ${action.mode}${action.as ? ` as ${action.as}` : ''}.`); return state;
     }
+    case 'DISCARD_CARD': {
+      if(state.phase!=='action')return fail(state,'Cards may be discarded during the action phase.');const index=state.player.hand.findIndex(card=>card.uid===action.uid&&card.id!=='wound');if(index<0)return fail(state,'Choose a non-Wound card from your hand.');const card=state.player.hand.splice(index,1)[0];state.player.discard.push(card);log(state,`${card.name} discarded.`);return state;
+    }
     case 'USE_UNIT': {
       const unit = state.player.units.find(u => u.id === action.id); if (!unit || unit.spent||unit.wounded) return fail(state, 'That unit is unavailable or wounded.');
       if(state.combat && SITES[state.map.find(h=>h.q===state.combat.q&&h.r===state.combat.r)?.site]?.underground)return fail(state,'Units cannot be used in a Dungeon or Tomb.');
@@ -364,7 +382,9 @@ export function reduceGame(input, action) {
       if (state.phase !== 'action') return fail(state, 'Finish combat before moving.');
       const hex = state.map.find(h => h.q === action.q && h.r === action.r); if (!hex || distance(state.player,hex)!==1) return fail(state, 'You may only move to an adjacent revealed space.');
       if(hex.revealed===false)return fail(state,'Explore that map tile before moving onto it.');
+      if(isOccupiedByOpponent(state,hex))return fail(state,'Another Mage Knight occupies that space.');
       if (hex.enemy && SITES[hex.site]?.kind!=='adventure') return fail(state, 'An enemy blocks that space. Start combat to enter it.');
+      const provoked=provokingEnemies(state,hex);if(provoked.length)return fail(state,`Moving there would provoke ${provoked.map(item=>item.enemy.name).join(' and ')}. Defeat the rampaging enemy first.`);
       const cost = TERRAIN_COST[state.time][hex.terrain]; if (!Number.isFinite(cost)) return fail(state, 'That terrain is impassable.');
       if (state.points.move < cost) return fail(state, `You need ${cost} Move.`);
       state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r; log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
@@ -376,7 +396,7 @@ export function reduceGame(input, action) {
       if(state.points.move<2)return fail(state,'Exploration requires 2 Move.');
       const tile=MAP_TILES.find(item=>item.id===target.tileId);const wildernessRemaining=state.map.some(hex=>hex.revealed===false&&!hex.core);
       if(tile?.core&&wildernessRemaining)return fail(state,'Reveal all countryside tiles before a core tile.');
-      state.points.move-=2;state.map.filter(hex=>hex.tileId===target.tileId).forEach(hex=>hex.revealed=true);state.exploredTiles.push(target.tileId);state.tileDeck=state.tileDeck.filter(id=>id!==target.tileId);log(state,`${state.player.name} explored ${target.tileId}.`);return state;
+      state.points.move-=2;state.map.filter(hex=>hex.tileId===target.tileId).forEach(hex=>hex.revealed=true);revealEnemyTokens(state,target.tileId);state.exploredTiles.push(target.tileId);state.tileDeck=state.tileDeck.filter(id=>id!==target.tileId);log(state,`${state.player.name} explored ${target.tileId}.`);return state;
     }
     case 'START_COOPERATIVE_ASSAULT': {
       if(!state.multiplayer||state.scenario!=='cooperative-conquest')return fail(state,'Joint assaults are available in Cooperative Conquest.');
@@ -509,6 +529,7 @@ function contributeRemote(state,action){
     const card=actor.hand[index],effect=action.mode==='sideways'?{attack:1}:card.basic;const contribution=combatContribution(effect);assault.contributors[actor.id]=Object.fromEntries(Object.entries(assault.contributors[actor.id]||combatContribution({})).map(([key,value])=>[key,value+contribution[key]]));actor.played.push(actor.hand.splice(index,1)[0]);log(state,`${actor.name} contributed ${card.name} to the city assault.`);bindPlayerState(state,state.activePlayerId);return state;
   }
   const pvp=state.pvp;if(!pvp||pvp.defenderId!==actor.id)return fail(state,'You are not the defender in this PvP combat.');
+  if(action.type==='PVP_RETREAT'){const attacker=state.players.find(player=>player.id===pvp.attackerId),hex=state.map.find(item=>item.q===action.q&&item.r===action.r);bindPlayerState(state,actor.id);if(!hex||hex.revealed===false||hex.enemy||distance(actor,hex)!==1||distance(attacker,hex)<=1||!Number.isFinite(TERRAIN_COST[state.time][hex.terrain])||isOccupiedByOpponent(state,hex))return fail(state,'Choose an empty adjacent revealed space farther from the attacker.');actor.q=hex.q;actor.r=hex.r;actor.fame=Math.max(0,actor.fame-1);state.pvp=null;state.phase='action';log(state,`${actor.name} retreated from PvP and lost 1 Fame.`);bindPlayerState(state,state.activePlayerId);return state;}
   if(action.ready){pvp.defenderReady=true;bindPlayerState(state,state.activePlayerId);return state;}
   bindPlayerState(state,actor.id);const index=actor.hand.findIndex(card=>card.uid===action.uid);if(index<0||actor.hand[index].id==='wound')return fail(state,'That defense card is unavailable.');
   const card=actor.hand[index],part=combatContribution(action.mode==='sideways'?{block:1}:card.basic);Object.keys(part).forEach(key=>pvp.defender[key]+=part[key]);actor.played.push(actor.hand.splice(index,1)[0]);log(state,`${actor.name} committed a card to PvP.`);bindPlayerState(state,state.activePlayerId);return state;
@@ -559,7 +580,7 @@ function winCombat(state, phase) {
   if(hex.site==='tomb')state.pendingRewards.push({type:'spell',source:'Tomb'},{type:'artifact',source:'Tomb'});
   if(hex.site==='monster-den')state.pendingRewards.push({type:'crystals',count:2,source:'Monster Den'});
   if(hex.site==='spawning-grounds')state.pendingRewards.push({type:'artifact',source:'Spawning Grounds'},{type:'crystals',count:3,source:'Spawning Grounds'});
-  if(hex.site==='ruins')state.pendingRewards.push({type:'crystals',count:4,source:'Ancient Ruins'});
+  if(hex.site==='ruins')state.pendingRewards.push(hex.ruinsToken?.reward==='artifact'?{type:'artifact',source:'Ancient Ruins'}:{type:'crystals',count:hex.ruinsToken?.count||4,source:'Ancient Ruins'});
   if(hex.site==='rampaging')state.player.reputation=Math.min(5,state.player.reputation+1);
   if(hex.site==='draconum')state.player.reputation=Math.min(5,state.player.reputation+2);
   if(hex.site==='city'){state.player.cities++;checkVictory(state);}
@@ -587,6 +608,7 @@ function interact(state, action) {
   if(action.kind==='heal') { const count=action.count||1; if(!['village','monastery'].includes(hex.site))return fail(state,'Healing is not offered here.');const each=hex.site==='monastery'?2:3;const price=count*each;if(state.points.influence<price)return fail(state,`You need ${price} Influence.`); if(state.player.wounds<count)return fail(state,'Not enough Wounds to heal.'); state.points.influence-=price; state.player.wounds-=count;removeWounds(state,count);log(state,`Healed ${count} Wound${count===1?'':'s'}.`); return state; }
   if(action.kind==='recruit') { const unit=state.offer.units.find(u=>u.id===action.id); if(!unit)return fail(state,'That unit is not in the offer.');const allowed=(city&&hex.cityColor==='white')||unit.sites.includes(hex.site)||(city&&unit.sites.includes('city'));if(!allowed)return fail(state,`${unit.name} cannot be recruited here.`); if(state.player.units.length>=state.player.command)return fail(state,'All command slots are full.'); const modifier=reputationInfluence(state.player.reputation); const cost=Math.max(0,unit.cost-modifier); if(state.points.influence<cost)return fail(state,`You need ${cost} Influence after reputation.`); state.points.influence-=cost; state.player.units.push({...unit,spent:false,wounded:false,woundCount:0}); state.offer.units=state.offer.units.filter(u=>u.id!==unit.id); log(state,`Recruited ${unit.name}.`); return state; }
   if(action.kind==='plunder') { if(hex.site!=='village')return fail(state,'Only villages may be plundered.'); state.player.reputation=Math.max(-7,state.player.reputation-1); draw(state,2); log(state,'Plundered the village: drew two cards and lost 1 Reputation.'); return endTurn(state); }
+  if(action.kind==='altar'){if(hex.site!=='ruins'||hex.ruinsToken?.type!=='altar'||hex.used)return fail(state,'There is no unused altar here.');if(!spendMana(state,hex.ruinsToken.color))return fail(state,`The altar requires ${hex.ruinsToken.color} mana.`);gainFame(state,hex.ruinsToken.fame);hex.used=true;log(state,`The ${hex.ruinsToken.color} altar granted ${hex.ruinsToken.fame} Fame.`);return state;}
   if(action.kind==='learn-advanced') {if(!(hex.site==='monastery'||(city&&hex.cityColor==='green')))return fail(state,'Advanced Actions are not taught here.');if(state.points.influence<6)return fail(state,'You need 6 Influence.');const card=state.offer.advanced.find(c=>c.id===action.id)||state.offer.advanced[0];if(!card)return fail(state,'No Advanced Action is available.');state.points.influence-=6;state.player.deck.unshift(cardWithUid(card,state));state.offer.advanced=state.offer.advanced.filter(c=>c.id!==card.id);log(state,`Learned ${card.name}.`);return state;}
   if(action.kind==='learn-spell') {if(!(hex.site==='mage-tower'||(city&&hex.cityColor==='blue')))return fail(state,'Spells are not taught here.');const card=state.offer.spells.find(c=>c.id===action.id);if(!card)return fail(state,'That Spell is not available.');if(state.points.influence<7)return fail(state,'You need 7 Influence.');if(!spendMana(state,card.color))return fail(state,`You also need ${card.color} mana.`);state.points.influence-=7;state.player.deck.unshift(cardWithUid(card,state));state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);log(state,`Learned ${card.name}.`);return state;}
   if(action.kind==='buy-artifact') {if(!(city&&hex.cityColor==='red'))return fail(state,'Artifacts are sold only in a conquered Red city.');if(state.points.influence<12)return fail(state,'You need 12 Influence.');state.points.influence-=12;state.pendingRewards.push({type:'artifact',source:'Red City'});log(state,'Purchased an Artifact reward.');return state;}
@@ -629,7 +651,7 @@ function nextRound(state) {
     state.players.forEach((player,index)=>{bindPlayerState(state,player.id);player.deck=shuffled([...player.discard,...player.hand],state.seed+state.round+index*997);player.hand=[];player.discard=[];player.tactic=null;player.tacticUsed=false;draw(state,handLimit(state));player.units.forEach(unit=>unit.spent=false);player.skills.forEach(skill=>{skill.used=false;skill.roundUsed=false;});});
     state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=[...state.players].sort((a,b)=>a.fame-b.fame||state.players.indexOf(a)-state.players.indexOf(b)).map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];bindPlayerState(state,state.players[0].id);
   } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];state.player.tactic=null;state.player.tacticUsed=false;draw(state,handLimit(state));state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
-  state.map.forEach(h=>h.used=false); state.source=shuffled([...COLORS,state.time==='day'?'gold':'black'],state.seed+state.round).slice(0,3).map((color,i)=>({id:`die-${i}`,color})); state.points=freshPoints();state.turn++;state.mana=[];state.sourceTaken=false;state.tactic=null;if(state.tacticsEnabled)state.phase='tactic';
+  state.map.forEach(h=>h.used=false);const sourceCount=(state.multiplayer?state.players.length:1)+2;state.source=shuffled([...COLORS,state.time==='day'?'gold':'black',...COLORS],state.seed+state.round).slice(0,sourceCount).map((color,i)=>({id:`die-${i}`,color})); state.points=freshPoints();state.turn++;state.mana=[];state.sourceTaken=false;state.tactic=null;if(state.tacticsEnabled)state.phase='tactic';
   log(state,`${state.time==='day'?'Day':'Night'} ${Math.ceil(state.round/2)} begins.`); return state;
 }
 
