@@ -1,9 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders the playable conquest board', () => {
+test('creates a multiplayer game lobby', () => {
+  window.history.replaceState({}, '', '/');
   render(<App />);
-  expect(screen.getByText('Solo Conquest rules engine')).toBeInTheDocument();
-  expect(screen.getByRole('img', { name: /mage knight map/i })).toBeInTheDocument();
-  expect(screen.getByText(/current phase/i)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /create a new game/i })).toBeInTheDocument();
+  fireEvent.change(screen.getByPlaceholderText(/enter your name/i), { target: { value: 'Chase' } });
+  fireEvent.click(screen.getByRole('button', { name: /create game/i }));
+  expect(screen.getByRole('heading', { name: /gather your mage knights/i })).toBeInTheDocument();
+  expect(screen.getByText(/invite your party/i)).toBeInTheDocument();
 });

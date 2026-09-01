@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { createGame, legalMoves, reduceGame, rulesSummary, SITES, TOVAK_SKILLS } from '../../gameEngine';
+import { CHARACTER_PROFILES, createGame, legalExplorations, legalMoves, reduceGame, rulesSummary, SITES, TACTICS, TOVAK_SKILLS } from '../../gameEngine';
 import '../../App.css';
 
 const siteNames = Object.fromEntries(Object.entries(SITES).map(([id,site])=>[id,site.name]));
@@ -10,36 +10,42 @@ const effectText = effect => Object.entries(effect).map(([k,v]) => {
   return `${k[0].toUpperCase()+k.slice(1)} ${typeof v === 'number' && v > 0 ? '+' : ''}${v}`;
 }).filter(Boolean).join(' · ');
 
-function GameComponent() {
-  const [game, setGame] = useState(() => {
+function GameComponent({session,onLeaveGame,multiplayerGame,onGameAction,networkStatus}) {
+  const [localGame, setLocalGame] = useState(() => {
+    if(session){const fresh=createGame(20260901,{tactics:true});const me=session.players.find(p=>p.id===session.currentPlayerId);fresh.scenario=session.scenario;fresh.player.name=me?.character?me.character[0].toUpperCase()+me.character.slice(1):me?.name||'Mage Knight';fresh.player.playerName=me?.name;return fresh;}
     try { const saved=localStorage.getItem('mage-knight-save');const parsed=saved&&JSON.parse(saved);return parsed?.version===2?parsed:createGame(); } catch { return createGame(); }
   });
+  const game=multiplayerGame||localGame;
   const [rulesOpen,setRulesOpen]=useState(false);
   const [sideways,setSideways]=useState(null);
-  const dispatch = action => setGame(old => reduceGame(old, action));
+  const dispatch = action => onGameAction?onGameAction(action):setLocalGame(old => reduceGame(old, action));
   const moves = useMemo(() => new Map(legalMoves(game).map(h=>[`${h.q},${h.r}`,h])),[game]);
+  const explorations=useMemo(()=>new Map(legalExplorations(game).map(item=>[item.tileId,item])),[game]);
   const here=game.map.find(h=>h.q===game.player.q&&h.r===game.player.r);
-  const save=()=>{localStorage.setItem('mage-knight-save',JSON.stringify(game)); setGame(g=>({...g,error:null,log:[{turn:g.turn,round:g.round,message:'Game saved in this browser.'},...g.log]}));};
-  const fresh=()=>{if(window.confirm('Start a new Solo Conquest? Your current position will be replaced.')){localStorage.removeItem('mage-knight-save');setGame(createGame(Date.now()));}};
+  const save=()=>{if(game.multiplayer)return;localStorage.setItem('mage-knight-save',JSON.stringify(game)); setLocalGame(g=>({...g,error:null,log:[{turn:g.turn,round:g.round,message:'Game saved in this browser.'},...g.log]}));};
+  const fresh=()=>{if(session){onLeaveGame?.();return}if(window.confirm('Start a new Solo Conquest? Your current position will be replaced.')){localStorage.removeItem('mage-knight-save');setLocalGame(createGame(Date.now()));}};
   const play=(uid,mode,as)=>{dispatch({type:'PLAY_CARD',uid,mode,as});setSideways(null);};
-  const hexClick=hex=>{const move=moves.get(`${hex.q},${hex.r}`);if(move?.legal)dispatch({type:'MOVE',q:hex.q,r:hex.r});};
+  const hexClick=hex=>{if(hex.revealed===false){const explore=explorations.get(hex.tileId);if(explore?.legal)dispatch({type:'EXPLORE',tileId:hex.tileId});return;}const move=moves.get(`${hex.q},${hex.r}`);if(move?.legal)dispatch({type:'MOVE',q:hex.q,r:hex.r});};
   const combat=game.combat?.enemy;
 
-  return <div className="game-shell">
+  const interactiveRemote=['team-assault','pvp-ranged','pvp-melee'].includes(game.phase);
+  const waitingForTurn=game.multiplayer&&game.phase!=='tactic'&&!interactiveRemote&&game.viewerPlayerId!==game.activePlayerId;
+
+  return <div className={`game-shell ${waitingForTurn?'not-my-turn':''}`}>
     <header className="topbar">
-      <div className="brand"><span className="brand-mark">MK</span><div><h1>Mage Knight</h1><span>Solo Conquest rules engine</span></div></div>
-      <div className="round-indicator"><span className={`orb ${game.time}`}>{game.time==='day'?'☀':'☾'}</span><div><b>{game.time} {Math.ceil(game.round/2)}</b><small>Round {game.round} of 6 · Turn {game.turn}</small></div></div>
-      <div className="top-actions"><button onClick={save}>Save</button><button onClick={()=>setRulesOpen(true)}>Rules</button><button onClick={fresh}>New game</button></div>
+      <div className="brand"><span className="brand-mark">MK</span><div><h1>Mage Knight</h1><span>{session?`${session.scenario.replaceAll('-',' ')} · ${session.players.length} players`:'Solo Conquest rules engine'}</span></div></div>
+      <div className="round-indicator"><span className={`orb ${game.time}`}>{game.time==='day'?'☀':'☾'}</span><div><b>{game.time} {Math.ceil(game.round/2)}</b><small>Round {game.round} of {game.maxRounds||6} · Turn {game.turn}{game.multiplayer&&game.activePlayerId?` · ${game.players.find(p=>p.id===game.activePlayerId)?.name}`:''}</small></div></div>
+      <div className="top-actions">{!game.multiplayer&&<button onClick={save}>Save</button>}<button onClick={()=>setRulesOpen(true)}>Rules</button><button onClick={fresh}>{game.multiplayer?'Leave game':'New game'}</button></div>
     </header>
 
     <main className="game-grid">
       <aside className="hero-panel panel">
-        <div className="hero-name"><div className="portrait">T</div><div><h2>{game.player.name}</h2><span>Level {game.player.level} Mage Knight</span></div></div>
+        <div className="hero-name"><div className="portrait">{game.player.name[0]}</div><div><h2>{game.player.name}</h2><span>{game.player.playerName?`${game.player.playerName} · `:''}Level {game.player.level} Mage Knight</span></div></div>
         <div className="track-grid"><Stat label="Fame" value={game.player.fame}/><Stat label="Reputation" value={game.player.reputation}/><Stat label="Armor" value={game.player.armor}/><Stat label="Command" value={`${game.player.units.length}/${game.player.command}`}/></div>
         <div className="fame-track"><i style={{width:`${Math.min(100,game.player.fame/99*100)}%`}}/><span>Next level: {game.player.level===10?'—':[3,8,15,24,35,48,63,80,99][game.player.level-1]}</span></div>
         <Section title="Action power"><div className="power-grid">{Object.entries(game.points).map(([k,v])=><div className={v?'lit':''} key={k}><span>{k}</span><b>{v}</b></div>)}</div></Section>
         <Section title="Mana inventory"><div className="mana-row">{Object.entries(game.player.crystals).map(([c,n])=><span className={`mana ${c}`} title={`${c} crystals`} key={c}>{n}</span>)}{game.mana.map((c,i)=><span className={`mana token ${c}`} key={`${c}${i}`}>•</span>)}</div></Section>
-        <Section title={`Tovak skills (${game.player.skills.length}/10)`}>{game.player.skills.length===0?<p className="muted">Skills are offered at levels 2, 4, and 6.</p>:game.player.skills.map(skill=><SkillControl key={skill.id} skill={skill} dispatch={dispatch}/>)}</Section>
+        <Section title={`${game.player.name} skills (${game.player.skills.length}/10)`}>{game.player.skills.length===0?<p className="muted">Character skills are offered on even levels.</p>:game.player.skills.map(skill=><SkillControl key={skill.id} skill={skill} dispatch={dispatch}/>)}</Section>
         <Section title={`Units (${game.player.units.length}/${game.player.command})`}>{game.player.units.length===0?<p className="muted">No units recruited.</p>:game.player.units.map(u=><button className="unit-chip" disabled={u.spent} onClick={()=>dispatch({type:'USE_UNIT',id:u.id})} key={u.id}><b>{u.name}</b><span>{effectText(u.ability)} · Armor {u.armor}</span></button>)}</Section>
         <Section title="Deed deck"><div className="deck-counts"><span><b>{game.player.deck.length}</b> deck</span><span><b>{game.player.discard.length}</b> discard</span><span><b>{game.player.wounds}</b> wounds</span></div></Section>
       </aside>
@@ -47,33 +53,35 @@ function GameComponent() {
       <section className="board-panel panel">
         <div className="board-heading"><div><span className="eyebrow">Atlantean Empire</span><h2>{here ? `${siteNames[here.site]||here.terrain} · ${here.q}, ${here.r}`:'Wilderness'}</h2></div><div className="legend"><span><i className="dot legal"/>reachable</span><span><i className="dot hostile"/>hostile</span></div></div>
         <HexMap game={game} moves={moves} onHex={hexClick} onCombat={(h)=>dispatch({type:'START_COMBAT',q:h.q,r:h.r})}/>
-        {game.error&&<div className="toast error"><b>Illegal action</b>{game.error}<button onClick={()=>setGame(g=>({...g,error:null}))}>×</button></div>}
-        {game.status!=='playing'&&<div className={`end-banner ${game.status}`}><h2>{game.status==='won'?'City conquered':'Time has run out'}</h2><p>{game.status==='won'?`Victory with ${game.player.fame} Fame.`:'The city remains unconquered after Night 3.'}</p><button onClick={fresh}>Play again</button></div>}
+        {game.error&&<div className="toast error"><b>Illegal action</b>{game.error}<button onClick={()=>dispatch({type:'CLEAR_ERROR'})}>×</button></div>}
+        {game.status!=='playing'&&<div className={`end-banner ${game.status}`}><h2>{game.status==='won'?'Conquest complete':'Time has run out'}</h2><p>{game.scoring?`Final party score: ${game.scoring.teamTotal}`:'Final scoring is ready.'}</p>{game.scoring?.players.map(row=><p key={row.playerId||row.name}><b>{row.name}: {row.total}</b> · Fame {row.fame} · Wound penalty {row.categories.wounds}</p>)}<button onClick={fresh}>Play again</button></div>}
+        {game.multiplayer&&game.phase!=='tactic'&&game.viewerPlayerId!==game.activePlayerId&&<div className="turn-wait"><span className="eyebrow">Waiting for player</span><h2>{game.players.find(player=>player.id===game.activePlayerId)?.name}'s turn</h2><p>You see every shared action live. Your hand remains private until your turn.</p><small>{networkStatus}</small></div>}
       </section>
 
       <aside className="turn-panel panel">
         <span className="eyebrow">Current phase</span><h2>{phaseName(game.phase)}</h2>
-        {combat?<Combat game={game} dispatch={dispatch}/>:game.pendingRewards.length?<RewardPanel game={game} dispatch={dispatch}/>:<ActionPanel game={game} here={here} dispatch={dispatch}/>}
+        {game.phase==='team-assault'?<TeamAssault game={game} dispatch={dispatch}/>:game.phase?.startsWith('pvp-')?<PvpPanel game={game} dispatch={dispatch}/>:combat?<Combat game={game} dispatch={dispatch}/>:game.pendingRewards.length?<RewardPanel game={game} dispatch={dispatch}/>:<ActionPanel game={game} here={here} dispatch={dispatch}/>}
         <Section title="Mana source"><div className="source">{game.source.map(d=><button disabled={game.sourceTaken||(d.color==='black'&&game.time==='day')} className={`source-die ${d.color}`} onClick={()=>dispatch({type:'TAKE_SOURCE',id:d.id})} key={d.id}><span>◆</span><small>{d.color}</small></button>)}</div><p className="hint">One die per turn. Gold is wild by day; black powers spells at night.</p></Section>
         <Section title="Turn log"><div className="log">{game.log.map((l,i)=><p key={i}><span>R{l.round} T{l.turn}</span>{l.message}</p>)}</div></Section>
       </aside>
     </main>
 
     <section className="hand-panel"><div className="hand-heading"><div><span className="eyebrow">Your hand</span><h2>{game.player.hand.length} cards</h2></div><span>Click an action to commit a card. Strong actions consume matching mana.</span></div><div className="hand-scroll">{game.player.hand.map(card=><DeedCard card={card} key={card.uid} onPlay={play} sideways={sideways} setSideways={setSideways}/>)}</div></section>
-    {rulesOpen&&<div className="modal-backdrop" onClick={()=>setRulesOpen(false)}><div className="rules-modal" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setRulesOpen(false)}>×</button><span className="eyebrow">Rules reference</span><h2>Core turn rules</h2>{rulesSummary.map(([title,text])=><div className="rule" key={title}><b>{title}</b><p>{text}</p></div>)}<h2>All base sites</h2>{Object.entries(SITES).map(([id,site])=><div className="rule" key={id}><b>{site.name}</b><p>{site.rule}</p></div>)}<h2>Tovak skills</h2>{TOVAK_SKILLS.map(skill=><div className="rule" key={skill.id}><b>{skill.name}</b><p>{skill.description} ({skill.cadence==='round'?'Once per round':'Once per turn'})</p></div>)}<p className="rule-note">This screen is a concise play aid. Site and combat prompts enforce the corresponding legality checks.</p></div></div>}
-    {game.skillChoices.length>0&&<div className="modal-backdrop"><div className="rules-modal skill-choice"><span className="eyebrow">Level {game.player.level}</span><h2>Choose a Tovak Skill</h2><p className="rule-note">Choose one. The other enters the Common Skills area; you also gain the lowest Advanced Action.</p>{game.skillChoices.map(skill=><button className="skill-option" key={skill.id} onClick={()=>dispatch({type:'SELECT_SKILL',id:skill.id})}><b>{skill.name}</b><span>{skill.description}</span></button>)}</div></div>}
+    {rulesOpen&&<div className="modal-backdrop" onClick={()=>setRulesOpen(false)}><div className="rules-modal" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setRulesOpen(false)}>×</button><span className="eyebrow">Rules reference</span><h2>Core turn rules</h2>{rulesSummary.map(([title,text])=><div className="rule" key={title}><b>{title}</b><p>{text}</p></div>)}<h2>All base sites</h2>{Object.entries(SITES).map(([id,site])=><div className="rule" key={id}><b>{site.name}</b><p>{site.rule}</p></div>)}<h2>{game.player.name} skills</h2>{(CHARACTER_PROFILES[game.player.character]?.skills||TOVAK_SKILLS).map(skill=><div className="rule" key={skill.id}><b>{skill.name}</b><p>{skill.description} ({skill.cadence==='round'?'Once per round':'Once per turn'})</p></div>)}</div></div>}
+    {game.skillChoices.length>0&&<div className="modal-backdrop"><div className="rules-modal skill-choice"><span className="eyebrow">Level {game.player.level}</span><h2>Choose a {game.player.name} Skill</h2><p className="rule-note">Choose one. The other enters the Common Skills area; you also gain the lowest Advanced Action.</p>{game.skillChoices.map(skill=><button className="skill-option" key={skill.id} onClick={()=>dispatch({type:'SELECT_SKILL',id:skill.id})}><b>{skill.name}</b><span>{skill.description}</span></button>)}</div></div>}
+    {game.phase==='tactic'&&<TacticPicker game={game} dispatch={dispatch}/>}
   </div>;
 }
 
 function Stat({label,value}){return <div className="stat"><span>{label}</span><b>{value}</b></div>}
 function Section({title,children}){return <section className="side-section"><h3>{title}</h3>{children}</section>}
-function phaseName(p){return ({action:'Action phase','combat-ranged':'Ranged / Siege','combat-block':'Block','combat-attack':'Attack'})[p]||p}
+function phaseName(p){return ({tactic:'Choose tactic',action:'Action phase','combat-ranged':'Ranged / Siege','combat-block':'Block','combat-attack':'Attack','team-assault':'Joint city assault','pvp-ranged':'PvP ranged','pvp-melee':'PvP melee'})[p]||p}
 
 function HexMap({game,moves,onHex,onCombat}){
   const size=40, ox=365, oy=215;
   const pos=h=>({x:ox+size*1.5*h.q,y:oy+size*Math.sqrt(3)*(h.r+h.q/2)});
   const points=(x,y)=>Array.from({length:6},(_,i)=>{const a=Math.PI/180*(60*i);return `${x+size*Math.cos(a)},${y+size*Math.sin(a)}`}).join(' ');
-  return <svg className="hex-map" viewBox="0 0 740 470" role="img" aria-label="Mage Knight map"><defs><filter id="shadow"><feDropShadow dx="0" dy="3" stdDeviation="3" floodOpacity=".35"/></filter></defs>{game.map.map(h=>{const {x,y}=pos(h), move=moves.get(`${h.q},${h.r}`), player=h.q===game.player.q&&h.r===game.player.r;return <g key={`${h.q},${h.r}`} className={`hex ${h.terrain} ${move?.legal?'reachable':''} ${h.enemy?'has-enemy':''}`} onClick={()=>onHex(h)}><polygon points={points(x,y)} filter="url(#shadow)"/><text className="terrain-icon" x={x} y={y+4}>{terrainGlyph[h.terrain]}</text>{h.site&&<g><rect className="site-label-bg" x={x-34} y={y+18} width="68" height="15" rx="7"/><text className="site-label" x={x} y={y+29}>{h.site==='city'?`${h.cityColor} city`:siteNames[h.site]}</text></g>}{move&&<text className="cost" x={x+24} y={y-22}>{move.cost}</text>}{h.enemy&&<g className="enemy" onClick={e=>{e.stopPropagation();onCombat(h)}}><circle cx={x} cy={y-9} r="12"/><text x={x} y={y-5}>⚔</text></g>}{h.conquered&&<text className="shield" x={x-24} y={y-20}>◆</text>}{player&&<g className="hero-token"><circle cx={x} cy={y-7} r="17"/><text x={x} y={y-1}>T</text></g>}</g>})}</svg>
+  return <svg className="hex-map" viewBox="0 0 740 470" role="img" aria-label="Mage Knight map"><defs><filter id="shadow"><feDropShadow dx="0" dy="3" stdDeviation="3" floodOpacity=".35"/></filter></defs>{game.map.map(h=>{const hidden=h.revealed===false,{x,y}=pos(h),move=moves.get(`${h.q},${h.r}`),players=(game.players||[game.player]).filter(player=>h.q===player.q&&h.r===player.r);return <g key={`${h.q},${h.r}`} className={`hex ${hidden?'unrevealed':h.terrain} ${move?.legal?'reachable':''} ${!hidden&&h.enemy?'has-enemy':''}`} onClick={()=>onHex(h)}><polygon points={points(x,y)} filter="url(#shadow)"/><text className="terrain-icon" x={x} y={y+4}>{hidden?'?':terrainGlyph[h.terrain]}</text>{!hidden&&h.site&&<g><rect className="site-label-bg" x={x-34} y={y+18} width="68" height="15" rx="7"/><text className="site-label" x={x} y={y+29}>{h.site==='city'?`${h.cityColor} city`:siteNames[h.site]}</text></g>}{hidden&&<text className="cost" x={x+24} y={y-22}>2</text>}{!hidden&&h.enemy&&<g className="enemy" onClick={e=>{e.stopPropagation();onCombat(h)}}><circle cx={x} cy={y-9} r="12"/><text x={x} y={y-5}>⚔</text></g>}{h.conquered&&<text className="shield" x={x-24} y={y-20}>◆</text>}{players.map((player,index)=><g className={`hero-token ${player.id===game.viewerPlayerId?'mine':''}`} key={player.id||'solo'} transform={`translate(${(index-(players.length-1)/2)*18} 0)`}><circle cx={x} cy={y-7} r={players.length>1?12:17}/><text x={x} y={y-2}>{player.name?.[0]||'M'}</text></g>)}</g>})}</svg>
 }
 
 function DeedCard({card,onPlay,sideways,setSideways}){
@@ -95,6 +103,10 @@ function RewardPanel({game,dispatch}){
 
 function Combat({game,dispatch}){const e=game.combat.enemy;return <div className="combat-card"><div className="enemy-title"><span>⚔</span><div><h3>{e.name}</h3><p>{e.traits.join(' · ')||'No abilities'}</p></div></div><div className="enemy-stats"><span>Armor <b>{e.armor}</b></span><span>Attack <b>{e.attack}</b></span><span>Fame <b>{e.fame}</b></span></div>{game.phase==='combat-ranged'&&<><p>Spend Ranged or Siege Attack. Fortified enemies can only be targeted with Siege.</p><button className="primary wide" onClick={()=>dispatch({type:'RESOLVE_RANGED'})}>Resolve ranged phase</button></>}{game.phase==='combat-block'&&<><p>Generate enough Block to stop the entire attack, or take Wounds.</p><button className="primary wide" onClick={()=>dispatch({type:'RESOLVE_BLOCK'})}>Resolve block phase</button></>}{game.phase==='combat-attack'&&<><p>Generate Attack equal to its armor. Physical resistance doubles the requirement.</p><button className="primary wide" onClick={()=>dispatch({type:'RESOLVE_ATTACK'})}>Defeat enemy</button></>}</div>}
 
+function TeamAssault({game,dispatch}){const assault=game.cooperativeAssault,mine=game.viewerPlayerId||game.player.id,eligible=assault.eligible.includes(mine),ready=assault.ready.includes(mine),leader=assault.leaderId===mine;return <div className="actions"><p className="phase-help"><b>Joint city assault</b> — each adjacent player may commit basic combat cards, then marks ready.</p>{eligible&&!ready&&game.player.hand.filter(card=>card.id!=='wound').map(card=><button key={card.uid} onClick={()=>dispatch({type:'TEAM_CONTRIBUTE',uid:card.uid})}>Contribute {card.name}<span>{effectText(card.basic)||'Attack +1 sideways'}</span></button>)}{eligible&&!ready&&<button className="primary" onClick={()=>dispatch({type:'TEAM_CONTRIBUTE',ready:true})}>Ready<span>No more contributions</span></button>}{ready&&<p className="hint">Contribution locked. Waiting for the party.</p>}{leader&&<button className="primary" onClick={()=>dispatch({type:'RESOLVE_COOPERATIVE_ASSAULT'})}>Resolve assault<span>{assault.ready.length}/{assault.eligible.length} players ready</span></button>}</div>}
+
+function PvpPanel({game,dispatch}){const duel=game.pvp,mine=game.viewerPlayerId||game.player.id,isDefender=duel.defenderId===mine,isAttacker=duel.attackerId===mine;return <div className="actions"><p className="phase-help"><b>{game.phase==='pvp-ranged'?'PvP ranged phase':'PvP melee phase'}</b> — the defender commits cards privately and then marks ready.</p>{isDefender&&!duel.defenderReady&&game.player.hand.filter(card=>card.id!=='wound').map(card=><button key={card.uid} onClick={()=>dispatch({type:'PVP_DEFEND',uid:card.uid})}>Commit {card.name}<span>{effectText(card.basic)||'Block +1 sideways'}</span></button>)}{isDefender&&!duel.defenderReady&&<button className="primary" onClick={()=>dispatch({type:'PVP_DEFEND',ready:true})}>Ready<span>Lock defense for this phase</span></button>}{isDefender&&duel.defenderReady&&<p className="hint">Defense locked. Waiting for the attacker.</p>}{isAttacker&&<button className="primary" disabled={!duel.defenderReady} onClick={()=>dispatch({type:'RESOLVE_PVP'})}>Resolve phase<span>{duel.defenderReady?'Defender ready':'Waiting for defender'}</span></button>}</div>}
+
 function ActionPanel({game,here,dispatch}){
   const canEndRound=!game.player.deck.length&&!game.player.hand.some(c=>c.id!=='wound');const city=here?.site==='city'&&here.conquered;
   const recruits=game.offer.units.filter(u=>(city&&here.cityColor==='white')||u.sites.includes(here?.site)||(city&&u.sites.includes('city')));
@@ -108,7 +120,13 @@ function ActionPanel({game,here,dispatch}){
     {city&&here.cityColor==='red'&&<button onClick={()=>dispatch({type:'INTERACT',kind:'buy-artifact'})}>Buy Artifact<span>12 Influence</span></button>}
     {city&&here.cityColor==='white'&&<button onClick={()=>dispatch({type:'INTERACT',kind:'add-elite'})}>Add Elite Unit to offer<span>2 Influence</span></button>}
     {recruits.map(u=><button key={u.id} onClick={()=>dispatch({type:'INTERACT',kind:'recruit',id:u.id})}>Recruit {u.name}<span>{u.cost} Influence · armor {u.armor}</span></button>)}
+    {game.multiplayer&&game.scenario==='cooperative-conquest'&&game.map.filter(hex=>hex.revealed!==false&&hex.site==='city'&&hex.enemy&&hexDistance(game.player,hex)===1).map(hex=><button className="danger-action" key={`${hex.q}:${hex.r}`} onClick={()=>dispatch({type:'START_COOPERATIVE_ASSAULT',q:hex.q,r:hex.r})}>Joint assault: {hex.cityColor} city<span>Adjacent allies may contribute</span></button>)}
+    {game.multiplayer&&game.scenario!=='cooperative-conquest'&&game.players.filter(player=>player.id!==game.player.id&&hexDistance(game.player,player)===1).map(player=><button className="danger-action" key={player.id} onClick={()=>dispatch({type:'INITIATE_PVP',targetId:player.id})}>Challenge {player.name}<span>Start player-versus-player combat</span></button>)}
     <button onClick={()=>dispatch({type:'REST'})}>Rest <span>Discard a Wound + card</span></button><button className="primary" onClick={()=>dispatch({type:canEndRound?'END_ROUND':'END_TURN'})}>{canEndRound?'End round':'End turn'}<span>{canEndRound?'Begin next day/night':'Discard played · draw up'}</span></button></div>
 }
+
+const hexDistance=(a,b)=>(Math.abs(a.q-b.q)+Math.abs(a.r-b.r)+Math.abs((-a.q-a.r)-(-b.q-b.r)))/2;
+
+function TacticPicker({game,dispatch}){const mine=game.multiplayer&&game.tacticSelections?.[game.viewerPlayerId];const taken=new Set(Object.values(game.tacticSelections||{}).map(tactic=>tactic.id));return <div className="modal-backdrop tactic-backdrop"><div className="tactic-modal"><span className={`orb ${game.time}`}>{game.time==='day'?'☀':'☾'}</span><span className="eyebrow">{game.time} {Math.ceil(game.round/2)} · Round {game.round}</span><h2>{mine?'Tactic locked in':'Choose your tactic'}</h2><p>{mine?`You chose ${mine.name}. Waiting for the other players.`:'Your tactic sets initiative for this round. Lower numbers act first.'}</p><div className="tactic-grid">{TACTICS[game.time].map(tactic=><button disabled={Boolean(mine)||taken.has(tactic.id)} key={tactic.id} onClick={()=>dispatch({type:'SELECT_TACTIC',id:tactic.id})}><i>{tactic.number}</i><b>{tactic.name}</b><span>{taken.has(tactic.id)?'Already chosen':tactic.description}</span></button>)}</div></div></div>}
 
 export default GameComponent;
