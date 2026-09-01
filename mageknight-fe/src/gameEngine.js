@@ -151,9 +151,15 @@ export const CONTENT_COUNTS={advancedActions:ADVANCED_CARDS.length,spells:SPELL_
 const clone = value => JSON.parse(JSON.stringify(value));
 const migrateState=state=>{
   const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
-  state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat)state.combat.damageUnits=state.combat.damageUnits||[];state.version=5;return state;
+  state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
 };
 const enemyGroup=members=>{const list=members.map(clone);return {id:list.map(enemy=>enemy.id).join('+'),uid:list.map(enemy=>enemy.uid||enemy.id).join('|'),name:list.length>1?`${list.length} defenders`:list[0].name,armor:list.reduce((sum,enemy)=>sum+enemy.armor,0),attack:list.reduce((sum,enemy)=>sum+enemy.attack,0),fame:list.reduce((sum,enemy)=>sum+enemy.fame,0),traits:[...new Set(list.flatMap(enemy=>enemy.traits||[]))],members:list};};
+const enemyKey=enemy=>enemy.uid||enemy.id;
+const livingCombatEnemies=state=>(state.combat?.enemies||[state.combat?.enemy].filter(Boolean)).filter(enemy=>!(state.combat?.defeatedIds||[]).includes(enemyKey(enemy)));
+const chosenCombatEnemies=(state,ids)=>{const living=livingCombatEnemies(state);if(!ids?.length)return living;const chosen=new Set(ids);return living.filter(enemy=>chosen.has(enemyKey(enemy)));};
+const markCombatDefeated=(state,enemies)=>{state.combat.defeatedIds=state.combat.defeatedIds||[];for(const enemy of enemies){const id=enemyKey(enemy);if(!state.combat.defeatedIds.includes(id))state.combat.defeatedIds.push(id);}};
+const spendCombatPoints=(state,keys)=>keys.forEach(key=>{state.points[key]=0;});
+const effectiveBlock=(state,enemy)=>{const traits=enemy.traits||[];const physical=state.points.block,ice=state.points.iceBlock,fire=state.points.fireBlock;if(traits.includes('coldfire'))return Math.floor((physical+ice+fire)/2);if(traits.includes('fire'))return ice+Math.floor((physical+fire)/2);if(traits.includes('ice'))return fire+Math.floor((physical+ice)/2);return physical+ice+fire;};
 const distance = (a, b) => (Math.abs(a.q-b.q) + Math.abs(a.r-b.r) + Math.abs((-a.q-a.r)-(-b.q-b.r))) / 2;
 const shuffled = (items, seed) => {
   const result = [...items]; let x = seed >>> 0;
@@ -431,31 +437,31 @@ export function reduceGame(input, action) {
         const entryCost=TERRAIN_COST[state.time][hex.terrain]; if(state.points.move<entryCost)return fail(state,`The assault requires ${entryCost} Move to enter that terrain.`);
         state.points.move-=entryCost;state.player.reputation=Math.max(-7,state.player.reputation-1);
       }
-      state.phase='combat-ranged'; state.combat={q:hex.q,r:hex.r,origin,kind,enemy:clone(hex.enemy),enemies:clone(hex.enemy.members||hex.enemies||[hex.enemy]),blocked:false,woundsTaken:0,damageUnits:[]}; log(state,`Combat begins against ${hex.enemy.name}. Ranged/Siege phase.`); return state;
+      state.phase='combat-ranged'; state.combat={q:hex.q,r:hex.r,origin,kind,enemy:clone(hex.enemy),enemies:clone(hex.enemy.members||hex.enemies||[hex.enemy]),defeatedIds:[],blockedIds:[],blocked:false,woundsTaken:0,damageUnits:[]}; log(state,`Combat begins against ${hex.enemy.name}. Ranged/Siege phase.`); return state;
     }
     case 'BURN_MONASTERY': {
       const hex=currentHex(state); if(state.phase!=='action'||hex?.site!=='monastery'||hex.burned)return fail(state,'You must be at an unburned monastery.');
       const monasteryCard=state.offer.monastery?.shift();if(monasteryCard)state.decks.advanced.push(monasteryCard);
       state.player.reputation=Math.max(-7,state.player.reputation-3); hex.enemy={...clone(ENEMIES.mage),id:'monastery-defender',name:'Monastery Defender',uid:`burn-${state.turn}`};
-      state.phase='combat-ranged';state.combat={q:hex.q,r:hex.r,origin:{q:hex.q,r:hex.r},kind:'burn',enemy:clone(hex.enemy),blocked:false,woundsTaken:0};log(state,'You attempt to burn the monastery: Reputation -3.');return state;
+      state.phase='combat-ranged';state.combat={q:hex.q,r:hex.r,origin:{q:hex.q,r:hex.r},kind:'burn',enemy:clone(hex.enemy),enemies:[clone(hex.enemy)],defeatedIds:[],blockedIds:[],blocked:false,woundsTaken:0,damageUnits:[]};log(state,'You attempt to burn the monastery: Reputation -3.');return state;
     }
     case 'RESOLVE_RANGED': {
-      if(state.phase!=='combat-ranged')return fail(state,'Not in the Ranged/Siege phase.'); const e=state.combat.enemy;
-      const required=e.armor; const siteFortified=state.combat.kind==='fortified';const tokenFortified=e.traits.includes('fortified');
-      let power=siteFortified&&tokenFortified?0:(siteFortified||tokenFortified?state.points.siege:state.points.siege+state.points.ranged);
-      if(!siteFortified&&!tokenFortified)power+=state.points.fireAttack+state.points.iceAttack;
-      if(e.traits.includes('physical-resistant'))power=Math.floor(power/2);
-      if(power>=required)return winCombat(state,'ranged'); state.phase='combat-block'; log(state,'Enemy survives. Block phase.'); return state;
+      if(state.phase!=='combat-ranged')return fail(state,'Not in the Ranged/Siege phase.');const targets=chosenCombatEnemies(state,action.targetIds);if(!targets.length)return fail(state,'Choose at least one living enemy.');
+      const siteFortified=state.combat.kind==='fortified',tokenFortified=targets.some(enemy=>(enemy.traits||[]).includes('fortified'));
+      if(siteFortified&&tokenFortified){if(action.targetIds?.length)return fail(state,'A twice-fortified enemy cannot be targeted in this phase.');return finishRangedPhase(state);}
+      let power=siteFortified||tokenFortified?state.points.siege:state.points.siege+state.points.ranged;if(targets.some(enemy=>(enemy.traits||[]).includes('physical-resistant')))power=Math.floor(power/2);
+      const required=targets.reduce((sum,enemy)=>sum+enemy.armor,0);if(power<required){if(action.targetIds?.length)return fail(state,`You need ${required} effective Ranged/Siege Attack for that group (currently ${power}).`);return finishRangedPhase(state);}
+      markCombatDefeated(state,targets);spendCombatPoints(state,['ranged','siege']);log(state,`${targets.map(enemy=>enemy.name).join(', ')} defeated with Ranged/Siege Attack.`);if(!livingCombatEnemies(state).length)return winCombat(state,'ranged');return state;
+    }
+    case 'FINISH_RANGED': if(state.phase!=='combat-ranged')return fail(state,'Not in the Ranged/Siege phase.');return finishRangedPhase(state);
+    case 'BLOCK_ENEMY': {
+      if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');const enemy=livingCombatEnemies(state).find(item=>enemyKey(item)===action.targetId);if(!enemy)return fail(state,'Choose one living enemy attack.');if((state.combat.blockedIds||[]).includes(enemyKey(enemy)))return fail(state,'That attack is already blocked.');
+      const required=enemy.attack*((enemy.traits||[]).includes('swift')?2:1),power=effectiveBlock(state,enemy);spendCombatPoints(state,['block','iceBlock','fireBlock']);if(power<required)return fail(state,`That block failed: ${required} was required, but only ${power} was committed.`);state.combat.blockedIds.push(enemyKey(enemy));log(state,`${enemy.name}'s attack was blocked separately.`);return state;
     }
     case 'RESOLVE_BLOCK': {
-      if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.'); const e=state.combat.enemy;
-      const required=(e.members||[e]).reduce((sum,enemy)=>sum+enemy.attack*(enemy.traits.includes('swift')?2:1),0);let efficientBlock=state.points.block+state.points.iceBlock+state.points.fireBlock;
-      if(e.traits.includes('fire'))efficientBlock=state.points.iceBlock+Math.floor((state.points.block+state.points.fireBlock)/2);
-      if(e.traits.includes('ice'))efficientBlock=state.points.fireBlock+Math.floor((state.points.block+state.points.iceBlock)/2);
-      state.combat.blocked=efficientBlock>=required;
-      if(!state.combat.blocked){assignCombatDamage(state,e);}
-      else log(state,'Attack fully blocked.'); state.phase='combat-attack'; return state;
+      if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');const enemies=livingCombatEnemies(state);if(enemies.length!==1)return fail(state,'Multiple enemy attacks must be blocked separately.');const enemy=enemies[0],required=enemy.attack*((enemy.traits||[]).includes('swift')?2:1),power=effectiveBlock(state,enemy);spendCombatPoints(state,['block','iceBlock','fireBlock']);state.combat.blocked=power>=required;if(state.combat.blocked){state.combat.blockedIds.push(enemyKey(enemy));log(state,'Attack fully blocked.');}return finishBlockPhase(state);
     }
+    case 'FINISH_BLOCK': if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');return finishBlockPhase(state);
     case 'ASSIGN_DAMAGE_UNIT': {
       if(state.phase!=='combat-block'||!state.combat)return fail(state,'Damage is assigned during the Block phase.');const unit=state.player.units.find(item=>item.id===action.id);if(!unit||unit.wounded)return fail(state,'Only an unwounded unit can receive damage.');state.combat.damageUnits=state.combat.damageUnits||[];const index=state.combat.damageUnits.indexOf(unit.id);if(index>=0)state.combat.damageUnits.splice(index,1);else state.combat.damageUnits.push(unit.id);return state;
     }
@@ -463,10 +469,11 @@ export function reduceGame(input, action) {
       if(state.phase!=='action')return fail(state,'Healing power is spent outside combat.');if(action.unitId){const unit=state.player.units.find(item=>item.id===action.unitId);if(!unit?.wounded)return fail(state,'That unit is not wounded.');const cost=unit.level||1;if(state.points.heal<cost)return fail(state,`Healing that unit requires ${cost} Heal.`);state.points.heal-=cost;unit.wounded=false;unit.woundCount=0;log(state,`${unit.name} was healed.`);return state;}if(state.player.wounds<1)return fail(state,'You have no Wound to heal.');if(state.points.heal<1)return fail(state,'You need 1 Heal.');state.points.heal--;state.player.wounds--;removeWounds(state,1);log(state,'Healed one Hero Wound.');return state;
     }
     case 'RESOLVE_ATTACK': {
-      if(state.phase!=='combat-attack')return fail(state,'Not in the Attack phase.'); const e=state.combat.enemy;
-      const physical=e.traits.includes('physical-resistant')?Math.floor(state.points.attack/2):state.points.attack;const ice=e.traits.includes('ice-resistant')?Math.floor(state.points.iceAttack/2):state.points.iceAttack;const fire=e.traits.includes('fire-resistant')?Math.floor(state.points.fireAttack/2):state.points.fireAttack;const effective=physical+ice+fire;const required=e.traits.includes('elusive')?Math.ceil(e.armor*1.5):e.armor;if(effective<required)return fail(state,`You need ${required} effective Attack to defeat this enemy (currently ${effective}).`);
-      return winCombat(state,'attack');
+      if(state.phase!=='combat-attack')return fail(state,'Not in the Attack phase.');const targets=chosenCombatEnemies(state,action.targetIds);if(!targets.length)return fail(state,'Choose at least one living enemy.');const traits=new Set(targets.flatMap(enemy=>enemy.traits||[]));
+      const physical=traits.has('physical-resistant')?Math.floor((state.points.attack+state.points.ranged+state.points.siege)/2):state.points.attack+state.points.ranged+state.points.siege;const ice=traits.has('ice-resistant')?Math.floor(state.points.iceAttack/2):state.points.iceAttack;const fire=traits.has('fire-resistant')?Math.floor(state.points.fireAttack/2):state.points.fireAttack;const effective=physical+ice+fire;const required=targets.reduce((sum,enemy)=>sum+(enemy.traits.includes('elusive')&&!state.combat.blockedIds.includes(enemyKey(enemy))?Math.ceil(enemy.armor*1.5):enemy.armor),0);if(effective<required)return fail(state,`You need ${required} effective Attack to defeat this enemy group (currently ${effective}).`);
+      markCombatDefeated(state,targets);spendCombatPoints(state,['attack','iceAttack','fireAttack','ranged','siege']);log(state,`${targets.map(enemy=>enemy.name).join(', ')} defeated in melee.`);if(!livingCombatEnemies(state).length)return winCombat(state,'attack');return state;
     }
+    case 'END_COMBAT': if(state.phase!=='combat-attack')return fail(state,'Combat may be ended after damage is assigned.');return leaveCombatWithSurvivors(state);
     case 'INTERACT': return interact(state, action);
     case 'REST': {
       if(state.phase!=='action')return fail(state,'You cannot rest during combat.'); const wi=state.player.hand.findIndex(c=>c.id==='wound');
@@ -561,6 +568,23 @@ function resolvePvp(state){
   }
   const attackerDamage=Math.max(0,pvp.attacker.attack-pvp.defender.block),defenderDamage=Math.max(0,pvp.defender.attack-pvp.attacker.block);if(attackerDamage){bindPlayerState(state,defender.id);wound(state,Math.max(1,Math.ceil(attackerDamage/defender.armor)));}if(defenderDamage){bindPlayerState(state,attacker.id);wound(state,Math.max(1,Math.ceil(defenderDamage/attacker.armor)));}
   const winner=attackerDamage===defenderDamage?null:attackerDamage>defenderDamage?attacker:defender;if(winner){bindPlayerState(state,winner.id);gainFame(state,2);winner.pvpWins=(winner.pvpWins||0)+1;}bindPlayerState(state,attacker.id);state.pvp=null;state.phase='action';log(state,winner?`${winner.name} won the PvP combat.`:'PvP combat ended in a draw.');return state;
+}
+
+function finishRangedPhase(state){
+  spendCombatPoints(state,['ranged','siege']);state.phase='combat-block';log(state,'Ranged/Siege attacks are complete. Surviving enemies attack separately.');return state;
+}
+
+function finishBlockPhase(state){
+  const blocked=new Set(state.combat.blockedIds||[]),unblocked=livingCombatEnemies(state).filter(enemy=>!blocked.has(enemyKey(enemy)));spendCombatPoints(state,['block','iceBlock','fireBlock']);state.combat.blocked=unblocked.length===0;
+  for(const enemy of unblocked)assignCombatDamage(state,enemy);
+  if(!unblocked.length)log(state,'Every surviving enemy attack was blocked.');state.phase='combat-attack';return state;
+}
+
+function leaveCombatWithSurvivors(state){
+  const combat=state.combat,hex=state.map.find(item=>item.q===combat.q&&item.r===combat.r),survivors=livingCombatEnemies(state),defeated=(combat.enemies||[]).filter(enemy=>(combat.defeatedIds||[]).includes(enemyKey(enemy)));
+  if(defeated.length){const group=enemyGroup(defeated);gainFame(state,group.fame);state.player.defeated=(state.player.defeated||[]).concat(defeated.map(enemy=>({id:enemy.id,name:enemy.name,fame:enemy.fame})));}
+  if(hex){const discardSurvivors=combat.kind==='burn'||['dungeon','tomb'].includes(hex.site);hex.enemies=discardSurvivors?[]:clone(survivors);hex.enemy=discardSurvivors||!survivors.length?null:enemyGroup(survivors);if(combat.kind==='burn'){hex.burned=true;hex.conquered=false;}}
+  state.phase='action';state.combat=null;log(state,defeated.length?`${defeated.length} defender${defeated.length===1?'':'s'} defeated; the site was not conquered.`:'Combat ended without defeating a defender.');return state;
 }
 
 function assignCombatDamage(state,enemy){
