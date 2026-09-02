@@ -192,7 +192,7 @@ const handLimit = state => {
   const nearOwnedKeep=state.map.some(h=>h.site==='keep'&&h.conquered&&h.ownerId===identity&&distance(state.player,h)<=1);
   const cityBonus=state.map.reduce((bonus,h)=>h.site==='city'&&h.conquered&&distance(state.player,h)<=1&&(h.ownerId===identity||(h.conquerors||[]).includes(identity))?Math.max(bonus,h.ownerId===identity?2:1):bonus,0);
   const printedLimit=baseHandLimit(state.player);
-  const planning=state.player.tactic?.id==='planning'&&!state.player.tacticUsed?1:0;
+  const orderIndex=state.multiplayer?(state.turnOrder||[]).indexOf(identity):-1,earlierPlayers=orderIndex>0?(state.turnOrder||[]).slice(0,orderIndex).filter(id=>id!=='dummy').map(id=>playerById(state,id)).filter(Boolean):[],planningBlocked=earlierPlayers.some(player=>distance(state.player,player)<=1),planning=state.player.tactic?.id==='planning'&&!state.player.tacticUsed&&!planningBlocked?1:0;
   return printedLimit+Math.max(nearOwnedKeep?(state.player.keeps||0):0,cityBonus)+planning;
 };
 
