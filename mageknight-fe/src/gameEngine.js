@@ -425,7 +425,7 @@ export function reduceGame(input, action) {
       if(effect.mana&&!COLORS.includes(action.manaColor))return fail(state,'Choose a basic mana color to gain.');
       if(effect.unitReady&&!state.player.units.some(unit=>unit.id===action.unitId&&unit.spent))return fail(state,'Choose a spent Unit to ready.');
       if(effect.discardRequired&&!state.player.hand.some(item=>item.uid===action.discardUid&&item.uid!==card.uid&&item.id!=='wound'))return fail(state,'Choose another non-Wound card to discard as the cost.');
-      const combatStat = {'combat-ranged':['ranged','siege'],'combat-block':['block'],'combat-attack':['attack']}[state.phase];
+      const combatStat = {'combat-ranged':['ranged','siege'],'combat-block':['block','iceBlock','fireBlock','coldfireBlock'],'combat-attack':['attack','iceAttack','fireAttack','ranged','siege']}[state.phase];
       if (combatStat) {
         const offered = action.mode === 'sideways' ? action.as : [action.effectAs,...Object.keys(effect).filter(k => effect[k])].filter(Boolean);
         const offeredStats = Array.isArray(offered) ? offered : [offered];
