@@ -360,6 +360,7 @@ export function reduceGame(input, action) {
       log(state,`Learned ${skill.name}${advanced?` and gained ${advanced.name}`:''}.`); return state;
     }
     case 'USE_SKILL': {const result=activateSkill(state,action);if(!result.error)result.player.atTurnStart=false;return result;}
+    case 'PREPARE_REWARD': return prepareReward(state);
     case 'CLAIM_REWARD': return claimReward(state,action);
     case 'TAKE_SOURCE': {
       if (state.sourceTaken) return fail(state, 'Only one Source die may be used per turn.');
@@ -684,14 +685,19 @@ function winCombat(state, phase) {
   log(state,`${enemy.name} defeated in the ${phase} phase for ${enemy.fame} Fame.`); return state;
 }
 
+function prepareReward(state){
+  const reward=state.pendingRewards[0];if(!reward)return fail(state,'There is no pending reward.');if(reward.type==='artifact'&&!reward.options){const count=reward.count||1;reward.options=state.decks.artifacts.splice(0,Math.min(state.decks.artifacts.length,count+1));log(state,`Revealed ${reward.options.length} Artifact choices.`);}if(reward.type==='crystals'&&!reward.rolls){const faces=[...COLORS,'gold','black'];reward.rolls=Array.from({length:reward.count||1},(_,index)=>faces[(state.seed+state.turn*17+state.round*31+index*7)%faces.length]);log(state,`Rolled crystal rewards: ${reward.rolls.join(', ')}.`);}return state;
+}
+
 function claimReward(state,action){
   const reward=state.pendingRewards[0];if(!reward)return fail(state,'There is no pending reward.');
   if(reward.type==='crystals'){
-    const colors=(action.colors||COLORS).filter(c=>COLORS.includes(c)).slice(0,reward.count);if(colors.length<reward.count)return fail(state,`Resolve ${reward.count} crystal rolls.`);
-    colors.forEach(c=>{if(state.player.crystals[c]<3)state.player.crystals[c]++;});
+    if(!reward.rolls)return fail(state,'Roll the crystal rewards first.');const goldCount=reward.rolls.filter(color=>color==='gold').length,colors=(action.colors||[]).filter(color=>COLORS.includes(color));if(colors.length!==goldCount)return fail(state,`Choose ${goldCount} basic color${goldCount===1?'':'s'} for the gold result${goldCount===1?'':'s'}.`);let goldIndex=0;reward.rolls.forEach(result=>{if(result==='black')gainFame(state,1);else{const color=result==='gold'?colors[goldIndex++]:result;if(state.player.crystals[color]<3)state.player.crystals[color]++;}});
+  } else if(reward.type==='artifact'){
+    if(!reward.options)return fail(state,'Reveal the Artifact choices first.');const count=Math.min(reward.count||1,reward.options.length),ids=[...new Set(action.ids||[action.id].filter(Boolean))];if(ids.length!==count||ids.some(id=>!reward.options.some(card=>card.id===id)))return fail(state,`Choose exactly ${count} revealed Artifact${count===1?'':'s'}.`);const chosen=ids.map(id=>reward.options.find(card=>card.id===id));state.player.deck.unshift(...chosen.map(card=>cardWithUid(card,state)));state.decks.artifacts.push(...reward.options.filter(card=>!ids.includes(card.id)));
   } else {
-    const offer=reward.type==='spell'?state.offer.spells:state.decks.artifacts;const card=offer.find(c=>c.id===action.id)||offer[0];if(!card)return fail(state,`No ${reward.type} is available.`);
-    state.player.deck.unshift(cardWithUid(card,state));if(reward.type==='spell'){state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);if(state.decks.spells.length)state.offer.spells.push(state.decks.spells.shift());}else state.decks.artifacts=state.decks.artifacts.filter(c=>c.id!==card.id);
+    const offer=state.offer.spells;const card=offer.find(c=>c.id===action.id);if(!card)return fail(state,`No ${reward.type} is available.`);
+    state.player.deck.unshift(cardWithUid(card,state));state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);if(state.decks.spells.length)state.offer.spells.push(state.decks.spells.shift());
   }
   state.pendingRewards.shift();log(state,`Claimed ${reward.type} reward from ${reward.source}.`);return state;
 }
