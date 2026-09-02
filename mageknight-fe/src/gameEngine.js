@@ -176,7 +176,7 @@ const ADVANCED_CARDS = [
   ...EXTENDED_ACTIONS,
 ];
 const SPELL_CARDS = [
-  {id:'fireball',name:'Fireball',color:'red',type:'spell',basic:{siege:5},strong:{siege:8}},
+  {id:'fireball',name:'Fireball',color:'red',type:'spell',basic:{fireRanged:5},strong:{fireSiege:8,woundCost:1}},
   {id:'restoration',name:'Restoration',color:'green',type:'spell',basic:{heal:3},strong:{heal:5}},
   {id:'meditation',name:'Meditation',color:'blue',type:'spell',basic:{draw:2},strong:{draw:3}},
   ...EXTENDED_SPELLS,

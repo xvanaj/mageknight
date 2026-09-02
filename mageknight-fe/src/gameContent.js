@@ -126,8 +126,8 @@ export const EXTENDED_ACTIONS = [
 ];
 
 export const EXTENDED_SPELLS = [
-  {id:'snowstorm',name:'Snowstorm',color:'blue',type:'spell',basic:{iceAttack:5},strong:{iceAttack:8}},
-  {id:'flame-wall',name:'Flame Wall',color:'red',type:'spell',basic:{fireBlock:5},strong:{fireAttack:7}},
+  {id:'snowstorm',name:'Snowstorm',color:'blue',type:'spell',basic:{iceRanged:5},strong:{iceSiege:8,woundCost:1}},
+  {id:'flame-wall',name:'Flame Wall',color:'red',type:'spell',basic:{options:[{id:'attack',label:'Fire Attack 5',effect:{fireAttack:5}},{id:'block',label:'Fire Block 7',effect:{fireBlock:7}}]},strong:{options:[{id:'attack',label:'Fire Attack 7',effect:{fireAttack:7}},{id:'block',label:'Fire Block 9',effect:{fireBlock:9}}]}},
   {id:'call-to-arms',name:'Call to Arms',color:'white',type:'spell',basic:{influence:5},strong:{anyCombat:6}},
   {id:'tremor',name:'Tremor',color:'green',type:'spell',basic:{siege:5},strong:{siege:8}},
   {id:'space-bending',name:'Space Bending',color:'blue',type:'spell',competitive:true,basic:{move:5},strong:{move:8}},
