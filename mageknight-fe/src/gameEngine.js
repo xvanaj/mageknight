@@ -150,7 +150,7 @@ export const CONTENT_COUNTS={advancedActions:ADVANCED_CARDS.length,spells:SPELL_
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const migrateState=state=>{
-  const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.skipNextTurn=Boolean(player.skipNextTurn);player.roundOrderFaceDown=Boolean(player.roundOrderFaceDown);player.cardsPlayedThisTurn=player.cardsPlayedThisTurn??player.played?.length??0;player.atTurnStart=Boolean(player.atTurnStart);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
+  const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.skipNextTurn=Boolean(player.skipNextTurn);player.roundOrderFaceDown=Boolean(player.roundOrderFaceDown);player.cardsPlayedThisTurn=player.cardsPlayedThisTurn??player.played?.length??0;player.atTurnStart=Boolean(player.atTurnStart);player.movedThisTurn=Boolean(player.movedThisTurn);player.turnAction=player.turnAction||null;player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
   state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.enemyDiscards=state.enemyDiscards||{};state.enemyDiscards.brown=state.enemyDiscards.brown||[];state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
 };
 const enemyGroup=members=>{const list=members.map(clone);return {id:list.map(enemy=>enemy.id).join('+'),uid:list.map(enemy=>enemy.uid||enemy.id).join('|'),name:list.length>1?`${list.length} defenders`:list[0].name,armor:list.reduce((sum,enemy)=>sum+enemy.armor,0),attack:list.reduce((sum,enemy)=>sum+enemy.attack,0),fame:list.reduce((sum,enemy)=>sum+enemy.fame,0),traits:[...new Set(list.flatMap(enemy=>enemy.traits||[]))],members:list};};
@@ -198,7 +198,7 @@ const makePlayer=(seed,character='tovak',name)=>{
   const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
   const cards=applyCharacterDeck(CARDS,character);
   const deck=shuffled(cards.map((card,index)=>({...clone(card),uid:`${card.id}-${index}`})),seed);
-  return {name:profile.name||name||'Mage Knight',character,q:0,r:0,fame:0,reputation:0,level:1,armor:profile.armor||2,command:1,deck:deck.slice(5),hand:deck.slice(0,5),discard:[],played:[],removed:[],wounds:0,crystals:{blue:0,red:0,green:0,white:0},units:[],keeps:0,cities:0,skills:[],defeated:[],assaults:0,pvpWins:0,tactic:null,tacticUsed:false,extraTurn:false,carry:null,skipNextTurn:false,roundOrderFaceDown:false,cardsPlayedThisTurn:0,atTurnStart:false};
+  return {name:profile.name||name||'Mage Knight',character,q:0,r:0,fame:0,reputation:0,level:1,armor:profile.armor||2,command:1,deck:deck.slice(5),hand:deck.slice(0,5),discard:[],played:[],removed:[],wounds:0,crystals:{blue:0,red:0,green:0,white:0},units:[],keeps:0,cities:0,skills:[],defeated:[],assaults:0,pvpWins:0,tactic:null,tacticUsed:false,extraTurn:false,carry:null,skipNextTurn:false,roundOrderFaceDown:false,cardsPlayedThisTurn:0,atTurnStart:false,movedThisTurn:false,turnAction:null};
 };
 
 export function createGame(seed = 20260901, options = {}) {
@@ -300,7 +300,7 @@ function wound(state, count) { state.player.wounds += count; for (let i=0;i<coun
 
 export function legalMoves(state) {
   if(state.multiplayer&&state.viewerPlayerId&&state.viewerPlayerId!==state.activePlayerId)return [];
-  if (state.phase !== 'action') return [];
+  if (state.phase !== 'action'||state.player.turnAction) return [];
   return state.map.filter(h => h.revealed!==false&&distance(state.player, h) === 1 && (!h.enemy || SITES[h.site]?.kind==='adventure')&&!isOccupiedByOpponent(state,h)&&Number.isFinite(TERRAIN_COST[state.time][h.terrain]))
     .map(h => ({ ...h, cost: TERRAIN_COST[state.time][h.terrain], legal: state.points.move >= TERRAIN_COST[state.time][h.terrain] }));
 }
@@ -308,7 +308,7 @@ const isOccupiedByOpponent=(state,hex)=>Boolean(state.multiplayer&&hex.site!=='p
 const provokingEnemies=(state,destination)=>state.map.filter(hex=>hex.revealed!==false&&hex.enemy&&['rampaging','draconum'].includes(hex.site)&&distance(state.player,hex)===1&&distance(destination,hex)===1);
 
 export function legalExplorations(state){
-  if(!state.explorationEnabled||state.phase!=='action')return [];
+  if(!state.explorationEnabled||state.phase!=='action'||state.player.turnAction)return [];
   const ids=new Set();return state.map.filter(hex=>hex.revealed===false&&distance(state.player,hex)===1&&!ids.has(hex.tileId)&&ids.add(hex.tileId)).map(hex=>({tileId:hex.tileId,q:hex.q,r:hex.r,cost:2,legal:state.points.move>=2}));
 }
 
@@ -401,7 +401,7 @@ export function reduceGame(input, action) {
       addEffect(state, unit.ability); unit.spent = true;state.player.atTurnStart=false; log(state, `${unit.name} activated.`); return state;
     }
     case 'MOVE': {
-      if (state.phase !== 'action') return fail(state, 'Finish combat before moving.');
+      if (state.phase !== 'action') return fail(state, 'Finish combat before moving.');if(state.player.turnAction)return fail(state,'Movement must happen before your turn action.');
       const hex = state.map.find(h => h.q === action.q && h.r === action.r); if (!hex || distance(state.player,hex)!==1) return fail(state, 'You may only move to an adjacent revealed space.');
       if(hex.revealed===false)return fail(state,'Explore that map tile before moving onto it.');
       if(isOccupiedByOpponent(state,hex))return fail(state,'Another Mage Knight occupies that space.');
@@ -409,36 +409,38 @@ export function reduceGame(input, action) {
       const provoked=provokingEnemies(state,hex);if(provoked.length)return fail(state,`Moving there would provoke ${provoked.map(item=>item.enemy.name).join(' and ')}. Defeat the rampaging enemy first.`);
       const cost = TERRAIN_COST[state.time][hex.terrain]; if (!Number.isFinite(cost)) return fail(state, 'That terrain is impassable.');
       if (state.points.move < cost) return fail(state, `You need ${cost} Move.`);
-      state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r;state.player.atTurnStart=false; log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
+      state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r;state.player.atTurnStart=false;state.player.movedThisTurn=true; log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
       return state;
     }
     case 'EXPLORE': {
-      if(!state.explorationEnabled||state.phase!=='action')return fail(state,'Exploration is not available now.');
+      if(!state.explorationEnabled||state.phase!=='action')return fail(state,'Exploration is not available now.');if(state.player.turnAction)return fail(state,'Exploration must happen before your turn action.');
       const target=state.map.find(hex=>hex.tileId===action.tileId&&hex.revealed===false&&distance(state.player,hex)===1);if(!target)return fail(state,'That tile is not adjacent to your position.');
       if(state.points.move<2)return fail(state,'Exploration requires 2 Move.');
       const tile=MAP_TILES.find(item=>item.id===target.tileId);const wildernessRemaining=state.map.some(hex=>hex.revealed===false&&!hex.core);
       if(tile?.core&&wildernessRemaining)return fail(state,'Reveal all countryside tiles before a core tile.');
-      state.points.move-=2;state.player.atTurnStart=false;state.map.filter(hex=>hex.tileId===target.tileId).forEach(hex=>hex.revealed=true);revealEnemyTokens(state,target.tileId);state.exploredTiles.push(target.tileId);state.tileDeck=state.tileDeck.filter(id=>id!==target.tileId);log(state,`${state.player.name} explored ${target.tileId}.`);return state;
+      state.points.move-=2;state.player.atTurnStart=false;state.player.movedThisTurn=true;state.map.filter(hex=>hex.tileId===target.tileId).forEach(hex=>hex.revealed=true);revealEnemyTokens(state,target.tileId);state.exploredTiles.push(target.tileId);state.tileDeck=state.tileDeck.filter(id=>id!==target.tileId);log(state,`${state.player.name} explored ${target.tileId}.`);return state;
     }
     case 'START_COOPERATIVE_ASSAULT': {
+      if(state.player.turnAction)return fail(state,'Only one action may be taken each turn.');
       if(!state.multiplayer||state.scenario!=='cooperative-conquest')return fail(state,'Joint assaults are available in Cooperative Conquest.');
       const hex=state.map.find(item=>item.q===action.q&&item.r===action.r);if(!hex?.enemy||hex.site!=='city')return fail(state,'Choose an unconquered city.');
       if(distance(state.player,hex)!==1)return fail(state,'The assault leader must be adjacent to the city.');
       const eligible=state.players.filter(player=>distance(player,hex)<=1).map(player=>player.id);if(eligible.length<2)return fail(state,'At least two Mage Knights must be on or adjacent to the city.');
       const cost=TERRAIN_COST[state.time][hex.terrain];if(state.points.move<cost)return fail(state,`The leader needs ${cost} Move to enter the city.`);state.points.move-=cost;
-      state.cooperativeAssault={q:hex.q,r:hex.r,leaderId:state.player.id,eligible,contributors:{[state.player.id]:{attack:state.points.attack+state.points.iceAttack+state.points.fireAttack,ranged:state.points.ranged,siege:state.points.siege,block:state.points.block+state.points.iceBlock+state.points.fireBlock}},ready:[state.player.id]};state.phase='team-assault';log(state,`Joint assault on the ${hex.cityColor} city begins.`);return state;
+      state.player.turnAction='combat';state.cooperativeAssault={q:hex.q,r:hex.r,leaderId:state.player.id,eligible,contributors:{[state.player.id]:{attack:state.points.attack+state.points.iceAttack+state.points.fireAttack,ranged:state.points.ranged,siege:state.points.siege,block:state.points.block+state.points.iceBlock+state.points.fireBlock}},ready:[state.player.id]};state.phase='team-assault';log(state,`Joint assault on the ${hex.cityColor} city begins.`);return state;
     }
     case 'RESOLVE_COOPERATIVE_ASSAULT': return resolveCooperativeAssault(state);
     case 'INITIATE_PVP': {
+      if(state.player.turnAction)return fail(state,'Only one action may be taken each turn.');
       if(!state.multiplayer||state.scenario==='cooperative-conquest')return fail(state,'PvP is disabled in Cooperative Conquest.');
       const defender=state.players.find(player=>player.id===action.targetId);if(!defender||defender.id===state.player.id)return fail(state,'Choose another player.');
       if(state.roundEndTurnsRemaining!==null||state.scenarioEndTurnsRemaining!==null)return fail(state,'PvP cannot begin after an end-of-round or end-game announcement.');if(defender.roundOrderFaceDown)return fail(state,'That player is protected until their skipped turn.');
       const targetHex=state.map.find(hex=>hex.q===defender.q&&hex.r===defender.r);if(!targetHex||targetHex.revealed===false)return fail(state,'The defender’s space must be revealed.');if(['portal','city'].includes(targetHex.site))return fail(state,'PvP is not allowed on a portal or city space.');const range=distance(state.player,defender);if(range>1)return fail(state,'You must enter the defender’s space to initiate PvP.');
       if(range===1){if(targetHex.enemy)return fail(state,'A hostile enemy prevents entry into that space.');const provoked=provokingEnemies(state,targetHex);if(provoked.length)return fail(state,'You cannot enter for PvP while provoking a rampaging enemy.');const cost=TERRAIN_COST[state.time][targetHex.terrain];if(!Number.isFinite(cost)||state.points.move<cost)return fail(state,`Entering the defender’s space requires ${Number.isFinite(cost)?cost:'legal'} Move.`);state.points.move-=cost;state.player.q=defender.q;state.player.r=defender.r;}
-      state.pvp={attackerId:state.player.id,defenderId:defender.id,phase:'attend',attendance:null,currentAttackerId:null,stage:'attend',passes:0,attackPower:0,attackElements:[],blockPower:0,blockTypes:{physical:0,fire:0,ice:0,coldfire:0},damageRemaining:0,prepared:{[state.player.id]:{ranged:state.points.ranged,siege:state.points.siege,attack:state.points.attack,iceAttack:state.points.iceAttack,fireAttack:state.points.fireAttack,block:state.points.block,iceBlock:state.points.iceBlock,fireBlock:state.points.fireBlock},[defender.id]:freshPoints()}};spendCombatPoints(state,['ranged','siege','attack','iceAttack','fireAttack','block','iceBlock','fireBlock']);state.phase='pvp-attend';log(state,`${state.player.name} entered ${defender.name}'s space and initiated PvP.`);return state;
+      state.player.turnAction='combat';state.pvp={attackerId:state.player.id,defenderId:defender.id,phase:'attend',attendance:null,currentAttackerId:null,stage:'attend',passes:0,attackPower:0,attackElements:[],blockPower:0,blockTypes:{physical:0,fire:0,ice:0,coldfire:0},damageRemaining:0,prepared:{[state.player.id]:{ranged:state.points.ranged,siege:state.points.siege,attack:state.points.attack,iceAttack:state.points.iceAttack,fireAttack:state.points.fireAttack,block:state.points.block,iceBlock:state.points.iceBlock,fireBlock:state.points.fireBlock},[defender.id]:freshPoints()}};spendCombatPoints(state,['ranged','siege','attack','iceAttack','fireAttack','block','iceBlock','fireBlock']);state.phase='pvp-attend';log(state,`${state.player.name} entered ${defender.name}'s space and initiated PvP.`);return state;
     }
     case 'START_COMBAT': {
-      if (state.phase !== 'action') return fail(state, 'Already resolving an action.');
+      if (state.phase !== 'action') return fail(state, 'Already resolving an action.');if(state.player.turnAction)return fail(state,'Only one action may be taken each turn.');
       const hex=state.map.find(h=>h.q===action.q&&h.r===action.r); if(!hex?.enemy) return fail(state,'There is no enemy there.');
       if(hex.revealed===false)return fail(state,'That enemy has not been revealed yet.');
       const kind=SITES[hex.site]?.kind;
@@ -449,13 +451,13 @@ export function reduceGame(input, action) {
         const entryCost=TERRAIN_COST[state.time][hex.terrain]; if(state.points.move<entryCost)return fail(state,`The assault requires ${entryCost} Move to enter that terrain.`);
         state.points.move-=entryCost;state.player.reputation=Math.max(-7,state.player.reputation-1);
       }
-      state.phase='combat-ranged'; state.combat={q:hex.q,r:hex.r,origin,kind,enemy:clone(hex.enemy),enemies:clone(hex.enemy.members||hex.enemies||[hex.enemy]),defeatedIds:[],blockedIds:[],blocked:false,woundsTaken:0,damageUnits:[]}; log(state,`Combat begins against ${hex.enemy.name}. Ranged/Siege phase.`); return state;
+      state.player.turnAction='combat';state.phase='combat-ranged'; state.combat={q:hex.q,r:hex.r,origin,kind,enemy:clone(hex.enemy),enemies:clone(hex.enemy.members||hex.enemies||[hex.enemy]),defeatedIds:[],blockedIds:[],blocked:false,woundsTaken:0,damageUnits:[]}; log(state,`Combat begins against ${hex.enemy.name}. Ranged/Siege phase.`); return state;
     }
     case 'BURN_MONASTERY': {
-      const hex=currentHex(state); if(state.phase!=='action'||hex?.site!=='monastery'||hex.burned)return fail(state,'You must be at an unburned monastery.');
+      const hex=currentHex(state); if(state.phase!=='action'||hex?.site!=='monastery'||hex.burned)return fail(state,'You must be at an unburned monastery.');if(state.player.turnAction)return fail(state,'Only one action may be taken each turn.');
       const monasteryCard=state.offer.monastery?.shift();if(monasteryCard)state.decks.advanced.push(monasteryCard);
       state.player.reputation=Math.max(-7,state.player.reputation-3); hex.enemy={...clone(ENEMIES.mage),id:'monastery-defender',name:'Monastery Defender',uid:`burn-${state.turn}`};
-      state.phase='combat-ranged';state.combat={q:hex.q,r:hex.r,origin:{q:hex.q,r:hex.r},kind:'burn',enemy:clone(hex.enemy),enemies:[clone(hex.enemy)],defeatedIds:[],blockedIds:[],blocked:false,woundsTaken:0,damageUnits:[]};log(state,'You attempt to burn the monastery: Reputation -3.');return state;
+      state.player.turnAction='combat';state.phase='combat-ranged';state.combat={q:hex.q,r:hex.r,origin:{q:hex.q,r:hex.r},kind:'burn',enemy:clone(hex.enemy),enemies:[clone(hex.enemy)],defeatedIds:[],blockedIds:[],blocked:false,woundsTaken:0,damageUnits:[]};log(state,'You attempt to burn the monastery: Reputation -3.');return state;
     }
     case 'RESOLVE_RANGED': {
       if(state.phase!=='combat-ranged')return fail(state,'Not in the Ranged/Siege phase.');const targets=chosenCombatEnemies(state,action.targetIds);if(!targets.length)return fail(state,'Choose at least one living enemy.');
@@ -489,9 +491,9 @@ export function reduceGame(input, action) {
       markCombatDefeated(state,targets);spendCombatPoints(state,['attack','iceAttack','fireAttack','ranged','siege']);log(state,`${targets.map(enemy=>enemy.name).join(', ')} defeated in melee.`);if(!livingCombatEnemies(state).length)return winCombat(state,'attack');return state;
     }
     case 'END_COMBAT': if(state.phase!=='combat-attack')return fail(state,'Combat may be ended after damage is assigned.');return leaveCombatWithSurvivors(state);
-    case 'INTERACT': return interact(state, action);
+    case 'INTERACT': {if(action.kind!=='plunder'&&state.player.turnAction&&state.player.turnAction!=='interact')return fail(state,'Only one action may be taken each turn.');const result=interact(state,action);if(!result.error&&action.kind!=='plunder')result.player.turnAction='interact';return result;}
     case 'REST': {
-      if(state.phase!=='action')return fail(state,'You cannot rest during combat.');const nonWounds=state.player.hand.filter(card=>card.id!=='wound'),wounds=state.player.hand.filter(card=>card.id==='wound');if(!nonWounds.length&&!wounds.length)return fail(state,'There are no cards in hand to recover with.');
+      if(state.phase!=='action')return fail(state,'You cannot rest during combat.');if(state.player.movedThisTurn||state.player.turnAction)return fail(state,'Resting replaces movement and the turn action.');const nonWounds=state.player.hand.filter(card=>card.id!=='wound'),wounds=state.player.hand.filter(card=>card.id==='wound');if(!nonWounds.length&&!wounds.length)return fail(state,'There are no cards in hand to recover with.');
       if(nonWounds.length){const chosen=nonWounds.find(card=>card.uid===action.cardUid)||nonWounds[0],woundIds=new Set(action.woundUids||wounds.map(card=>card.uid));state.player.hand=state.player.hand.filter(card=>{if(card.uid===chosen.uid||(card.id==='wound'&&woundIds.has(card.uid))){state.player.discard.push(card);return false;}return true;});log(state,`Standard rest: discarded ${chosen.name} and ${woundIds.size} Wound${woundIds.size===1?'':'s'}.`);}else{const chosen=wounds.find(card=>card.uid===action.woundUid)||wounds[0];state.player.hand=state.player.hand.filter(card=>{if(card.uid===chosen.uid){state.player.discard.push(card);return false;}return true;});log(state,'Slow recovery: discarded one Wound.');}return endTurn(state);
     }
     case 'END_TURN': {
@@ -708,7 +710,7 @@ function endTurn(state,roundAnnouncement=false) {
   const carry=state.player.carry;state.player.carry=null;
   if(!roundAnnouncement&&hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
   if(!roundAnnouncement&&hex?.site==='glade'&&state.player.wounds>0){const before=state.player.hand.length+state.player.discard.length;removeWounds(state,1);if(state.player.hand.length+state.player.discard.length<before){state.player.wounds--;log(state,'The magical glade removed one Wound.');}}
-  state.player.discard.push(...state.player.played); state.player.played=[];state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=false; state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value); state.mana=[]; state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;
+  state.player.discard.push(...state.player.played); state.player.played=[];state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=false;state.player.movedThisTurn=false;state.player.turnAction=null; state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value); state.mana=[]; state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;
   state.player.skills.forEach(s=>s.used=false); const target=handLimit(state); if(!roundAnnouncement&&state.player.hand.length<target)draw(state,target-state.player.hand.length);
   if(!roundAnnouncement&&hex?.site==='glade')state.mana.push(state.time==='day'?'gold':'black');
   state.turn++;
@@ -731,9 +733,9 @@ function nextRound(state) {
   if(state.round>=(state.maxRounds||6)){state.status='lost';state.scoring=calculateScore(state);log(state,'The final Night ends before the cities are conquered. Final scoring is complete.');return state;}
   state.round++; state.time=state.time==='day'?'night':'day';refreshOffers(state);
   if(state.multiplayer){
-    state.players.forEach((player,index)=>{bindPlayerState(state,player.id);player.deck=shuffled([...player.discard,...player.hand],state.seed+state.round+index*997);player.hand=[];player.discard=[];player.tactic=null;player.tacticUsed=false;player.cardsPlayedThisTurn=0;player.atTurnStart=false;draw(state,handLimit(state));player.units.forEach(unit=>unit.spent=false);player.skills.forEach(skill=>{skill.used=false;skill.roundUsed=false;});});
+    state.players.forEach((player,index)=>{bindPlayerState(state,player.id);player.deck=shuffled([...player.discard,...player.hand],state.seed+state.round+index*997);player.hand=[];player.discard=[];player.tactic=null;player.tacticUsed=false;player.cardsPlayedThisTurn=0;player.atTurnStart=false;player.movedThisTurn=false;player.turnAction=null;draw(state,handLimit(state));player.units.forEach(unit=>unit.spent=false);player.skills.forEach(skill=>{skill.used=false;skill.roundUsed=false;});});
     state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=[...state.players].sort((a,b)=>a.fame-b.fame||state.players.indexOf(a)-state.players.indexOf(b)).map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];bindPlayerState(state,state.players[0].id);
-  } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];state.player.tactic=null;state.player.tacticUsed=false;state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=!state.tacticsEnabled;draw(state,handLimit(state));state.player.units.forEach(unit=>{unit.spent=false;});state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
+  } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];state.player.tactic=null;state.player.tacticUsed=false;state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=!state.tacticsEnabled;state.player.movedThisTurn=false;state.player.turnAction=null;draw(state,handLimit(state));state.player.units.forEach(unit=>{unit.spent=false;});state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
   state.map.forEach(h=>h.used=false);const sourceCount=(state.multiplayer?state.players.length:1)+2;state.source=shuffled([...COLORS,state.time==='day'?'gold':'black',...COLORS],state.seed+state.round).slice(0,sourceCount).map((color,i)=>({id:`die-${i}`,color})); state.points=freshPoints();state.turn++;state.mana=[];state.sourceTaken=false;state.tactic=null;if(state.tacticsEnabled)state.phase='tactic';
   log(state,`${state.time==='day'?'Day':'Night'} ${Math.ceil(state.round/2)} begins.`); return state;
 }
