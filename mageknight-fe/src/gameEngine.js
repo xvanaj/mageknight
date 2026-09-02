@@ -322,7 +322,8 @@ export function calculateScore(state){
   });
   if(state.multiplayer&&state.scenario!=='cooperative-conquest'&&rows.length>1){for(const category of ['knowledge','loot','leadership','conquest','adventure']){const best=Math.max(...rows.map(row=>row.categories[category]));if(best>0){const leaders=rows.filter(row=>row.categories[category]===best);leaders.forEach(row=>{row.categories.achievements+=leaders.length===1?3:1;});}}const worst=Math.min(...rows.map(row=>row.categories.wounds));if(worst<0){const beaten=rows.filter(row=>row.categories.wounds===worst);beaten.forEach(row=>{row.categories.achievements-=beaten.length===1?3:1;});}const bestCity=Math.max(...rows.map(row=>row.categories.city));if(bestCity>0){const cityLeaders=rows.filter(row=>row.categories.city===bestCity);cityLeaders.forEach(row=>{row.categories.achievements+=cityLeaders.length===1?5:2;});}}
   rows.forEach(row=>{row.total=row.fame+Object.values(row.categories).reduce((sum,value)=>sum+value,0);});rows.sort((a,b)=>b.total-a.total);
-  return {players:rows,teamTotal:rows.reduce((sum,row)=>sum+row.total,0),winner:rows[0]?.playerId||null};
+  const cooperative=state.multiplayer&&state.scenario==='cooperative-conquest',teamTotal=cooperative?Math.min(...rows.map(row=>row.fame))+['knowledge','loot','leadership','conquest','adventure','city'].reduce((sum,category)=>sum+Math.max(...rows.map(row=>row.categories[category])),0)+Math.min(...rows.map(row=>row.categories.wounds)):rows.reduce((sum,row)=>sum+row.total,0);
+  return {players:rows,teamTotal,winner:cooperative?null:rows[0]?.playerId||null};
 }
 
 export function reduceGame(input, action) {
