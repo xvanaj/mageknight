@@ -131,9 +131,9 @@ export const EXTENDED_SPELLS = [
   {id:'call-to-arms',name:'Call to Arms',color:'white',type:'spell',basic:{influence:5},strong:{anyCombat:6}},
   {id:'tremor',name:'Tremor',color:'red',type:'spell',basic:{options:[{id:'target',label:'One enemy: Armor -3',effect:{armorChange:{amount:-3,minimum:1}}},{id:'all',label:'All enemies: Armor -2',effect:{allArmorChange:{amount:-2,minimum:1}}}]},strong:{options:[{id:'target',label:'One enemy: Armor -3, or -6 if fortified',effect:{armorChange:{amount:-3,fortifiedAmount:-6,minimum:1}}},{id:'all',label:'All enemies: Armor -2, or -4 if fortified',effect:{allArmorChange:{amount:-2,fortifiedAmount:-4,minimum:1}}}]}},
   {id:'space-bending',name:'Space Bending',color:'blue',type:'spell',competitive:true,basic:{move:5},strong:{move:8}},
-  {id:'demolish',name:'Demolish',color:'red',type:'spell',basic:{siege:5},strong:{siege:9}},
+  {id:'demolish',name:'Demolish',color:'red',type:'spell',basic:{allArmorChange:{amount:-1,minimum:1,exclude:'fire-resistant'},exposeAll:'fortification'},strong:{defeatTarget:{exclude:'fire-resistant',excludeArcane:true},allArmorChange:{amount:-1,minimum:1,exclude:'fire-resistant'}}},
   {id:'burning-shield',name:'Burning Shield',color:'red',type:'spell',basic:{fireBlock:6},strong:{fireAttack:8}},
-  {id:'chill',name:'Chill',color:'blue',type:'spell',basic:{iceAttack:5},strong:{iceAttack:9}},
+  {id:'chill',name:'Chill',color:'blue',type:'spell',basic:{enemyControl:{skipAttack:true,removeFireResistance:true,exclude:'ice-resistant',excludeArcane:true}},strong:{enemyControl:{skipAttack:true,armorChange:-4,minimum:1,exclude:'ice-resistant',excludeArcane:true}}},
   {id:'mana-bolt',name:'Mana Bolt',color:'blue',type:'spell',basic:{ranged:5},strong:{siege:8}},
   {id:'expose',name:'Expose',color:'white',type:'spell',basic:{ranged:2,exposeTarget:'both'},strong:{options:[{id:'fortification',label:'All enemies lose fortification; Ranged Attack 3',effect:{ranged:3,exposeAll:'fortification'}},{id:'resistances',label:'All enemies lose resistances; Ranged Attack 3',effect:{ranged:3,exposeAll:'resistances'}}]}},
   {id:'underground-travel',name:'Underground Travel',color:'green',type:'spell',competitive:true,basic:{move:5},strong:{move:9}},
@@ -141,7 +141,7 @@ export const EXTENDED_SPELLS = [
   {id:'mana-claim',name:'Mana Claim',color:'white',type:'spell',competitive:true,basic:{mana:'crystal'},strong:{mana:'crystal',draw:3}},
   {id:'energy-flow',name:'Energy Flow',color:'green',type:'spell',basic:{unitReady:1},strong:{anyCombat:7}},
   {id:'mind-read',name:'Mind Read',color:'white',type:'spell',competitive:true,basic:{influence:5},strong:{influence:9}},
-  {id:'whirlwind',name:'Whirlwind',color:'green',type:'spell',basic:{ranged:5},strong:{siege:8}},
+  {id:'whirlwind',name:'Whirlwind',color:'white',type:'spell',basic:{enemyControl:{skipAttack:true}},strong:{defeatTarget:{attackPhaseOnly:true}}},
   {id:'cure',name:'Cure',color:'green',type:'spell',basic:{heal:4},strong:{heal:7}},
 ];
 
