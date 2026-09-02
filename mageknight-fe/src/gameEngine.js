@@ -414,6 +414,7 @@ export function reduceGame(input, action) {
     }
     case 'USE_SKILL': {const result=activateSkill(state,action);if(!result.error)result.player.atTurnStart=false;return result;}
     case 'PREPARE_REWARD': if(state.phase!=='end-rewards')return fail(state,'Combat rewards are claimed during end-of-turn processing.');return prepareReward(state);
+    case 'SELECT_REWARD': {if(state.phase!=='end-rewards')return fail(state,'Reward order is chosen during end-of-turn processing.');if(!Number.isInteger(action.index)||action.index<0||action.index>=state.pendingRewards.length)return fail(state,'Choose an available combat reward.');const [reward]=state.pendingRewards.splice(action.index,1);state.pendingRewards.unshift(reward);return state;}
     case 'CLAIM_REWARD': {if(state.phase!=='end-rewards')return fail(state,'Combat rewards are claimed during end-of-turn processing.');const result=claimReward(state,action);if(result.error||result.pendingRewards.length)return result;return endTurn(result,result.endTurnContext?.roundAnnouncement,'after-rewards');}
     case 'TAKE_SOURCE': {
       if (state.sourceTaken) return fail(state, 'Only one Source die may be used per turn.');
@@ -786,7 +787,7 @@ function winCombat(state, phase) {
   if(kind==='burn'){hex.burned=true;state.pendingRewards.push({type:'artifact',source:'Burned monastery'});}
   if(hex.site==='keep')state.player.keeps++;
   if(hex.site==='mage-tower')state.pendingRewards.push({type:'spell',source:'Mage Tower'});
-  if(hex.site==='dungeon')state.pendingRewards.push({type:(state.seed+state.turn)%3===0?'spell':'artifact',source:'Dungeon'});
+  if(hex.site==='dungeon')state.pendingRewards.push({type:'artifact',source:'Dungeon'});
   if(hex.site==='tomb')state.pendingRewards.push({type:'spell',source:'Tomb'},{type:'artifact',source:'Tomb'});
   if(hex.site==='monster-den')state.pendingRewards.push({type:'crystals',count:2,source:'Monster Den'});
   if(hex.site==='spawning-grounds')state.pendingRewards.push({type:'artifact',source:'Spawning Grounds'},{type:'crystals',count:3,source:'Spawning Grounds'});
