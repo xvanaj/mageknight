@@ -139,7 +139,7 @@ export const EXTENDED_SPELLS = [
   {id:'underground-travel',name:'Underground Travel',color:'green',type:'spell',basic:{move:5},strong:{move:9}},
   {id:'wings-of-wind',name:'Wings of Wind',color:'white',type:'spell',basic:{move:5},strong:{move:8}},
   {id:'mana-claim',name:'Mana Claim',color:'white',type:'spell',competitive:true,basic:{mana:'crystal'},strong:{mana:'crystal',draw:3}},
-  {id:'energy-flow',name:'Energy Flow',color:'green',type:'spell',basic:{unitReady:1},strong:{anyCombat:7}},
+  {id:'energy-flow',name:'Energy Flow',color:'green',type:'spell',basic:{energyFlow:{heal:false,opponentMaxLevel:2}},strong:{energyFlow:{heal:true,opponentMaxLevel:3}}},
   {id:'mind-read',name:'Mind Read',color:'white',type:'spell',competitive:true,basic:{influence:5},strong:{influence:9}},
   {id:'whirlwind',name:'Whirlwind',color:'white',type:'spell',basic:{enemyControl:{skipAttack:true}},strong:{defeatTarget:{attackPhaseOnly:true}}},
   {id:'mana-meltdown',name:'Mana Meltdown',color:'red',type:'spell',competitive:true,basic:{manaMeltdown:'basic'},strong:{manaMeltdown:'strong'}},
