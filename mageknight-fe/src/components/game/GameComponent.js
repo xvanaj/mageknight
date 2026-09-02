@@ -5,12 +5,14 @@ import '../../App.css';
 const siteNames = Object.fromEntries(Object.entries(SITES).map(([id,site])=>[id,site.name]));
 const terrainGlyph = { plains:'·', forest:'♣', hills:'⌁', desert:'☀', wasteland:'◇', swamp:'≈', lake:'≋', mountain:'▲' };
 const effectText = effect => Object.entries(effect).map(([k,v]) => {
-  if (k === 'movementRule') { const replacements=Object.entries(v.replace||{}).map(([terrain,cost])=>`${terrain} costs ${cost}`);if(v.allTraversable?.replace)return `all traversable terrain costs ${v.allTraversable.replace}`;if(v.allTraversable?.reduction)return `traversable terrain cost -${v.allTraversable.reduction}, minimum ${v.allTraversable.minimum}`;return replacements.join(', '); }
+  if (k === 'movementRule') { const replacements=Object.entries(v.replace||{}).map(([terrain,cost])=>`${terrain} costs ${cost}`);if(v.all?.replace)return `all terrain costs ${v.all.replace}`;if(v.allTraversable?.replace)return `all traversable terrain costs ${v.allTraversable.replace}`;if(v.allTraversable?.reduction)return `traversable terrain cost -${v.allTraversable.reduction}, minimum ${v.allTraversable.minimum}`;return replacements.join(', '); }
+  if (k === 'terrainProhibition') return `cannot enter ${v.join(' or ')}`;
   if (k === 'healOutsideCombat') return `Heal +${v} outside combat`;
   if (k === 'endTurnPlacement') return v==='deck-top'?'return to top of Deed deck at turn end':'return to bottom of Deed deck at turn end';
   if (k === 'moveConversion') return `convert Move to ${Object.entries(v).map(([type,cost])=>`${type} (${cost}:1)`).join(' or ')}`;
   if (k === 'moveCardsInCombat') return 'Move cards may be played in combat this turn';
   if (k === 'ignoreRampagers') return 'ignore rampaging enemies while moving';
+  if (k === 'ignoreFortifications') return 'may pass through unconquered fortified sites without assaulting';
   if (k === 'spaceBending') return 'spaces and tile placements two hexes away count as adjacent this turn';
   if (k === 'timeBending') return 'return other played cards to hand, skip drawing, and immediately take another turn';
   if (k === 'handLimitBonus') return `hand limit +${v} this turn`;

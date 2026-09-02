@@ -268,7 +268,7 @@ const scenarioTileIds=(scenario,playerCount)=>{const setup=SCENARIO_TILE_COUNTS[
 const rollSource=(count,time,seed)=>{const faces=[...COLORS,'gold','black',...COLORS],colors=shuffled(faces,seed+(time==='night'?97:0)).slice(0,count),required=Math.ceil(count/2);let basics=colors.filter(color=>COLORS.includes(color)).length;for(let index=0;index<colors.length&&basics<required;index++)if(!COLORS.includes(colors[index])){colors[index]=COLORS[(seed+index*17)%COLORS.length];basics++;}return colors.map((color,index)=>({id:`die-${index}`,color,used:false}));};
 const log = (state, message) => { state.log.unshift({ turn: state.turn, round: state.round, message }); state.log = state.log.slice(0, 80); };
 const fail = (state, error) => ({ ...state, error });
-const freshBonuses=()=>({sideways:null,manaOverload:null,terrainReduction:null,terrainCostReduction:null,hexCostReduction:null,movementRules:[],moveConversion:null,moveCardsInCombat:false,influenceConversion:null,influenceCardsInCombat:false,attackBlockCardBonus:null,unitCombatBonus:null,unitsCannotAbsorbDamage:false,ignoreRampagers:false,spaceBending:false,timeBending:false,handLimitBonus:0,crystalMastery:false,defeatFame:null,unitResistances:false,attackConversion:null,burningShield:null,swiftBlock:0,extraSourceUses:0,blackAsBasic:false,goldAsBasic:false,recruitmentBonus:null,learning:null});
+const freshBonuses=()=>({sideways:null,manaOverload:null,terrainReduction:null,terrainCostReduction:null,hexCostReduction:null,movementRules:[],terrainProhibition:[],moveConversion:null,moveCardsInCombat:false,influenceConversion:null,influenceCardsInCombat:false,attackBlockCardBonus:null,unitCombatBonus:null,unitsCannotAbsorbDamage:false,ignoreRampagers:false,ignoreFortifications:false,spaceBending:false,timeBending:false,handLimitBonus:0,crystalMastery:false,defeatFame:null,unitResistances:false,attackConversion:null,burningShield:null,swiftBlock:0,extraSourceUses:0,blackAsBasic:false,goldAsBasic:false,recruitmentBonus:null,learning:null});
 const resetTurnBonuses=state=>{Object.assign(state.bonuses,freshBonuses());state.pendingCardBoost=null;};
 const clearCombatBonuses=state=>{state.bonuses.unitCombatBonus=null;state.bonuses.unitsCannotAbsorbDamage=false;state.bonuses.burningShield=null;};
 const checkpointTurn=state=>{const snapshot=clone({...state,undoCheckpoint:null});delete snapshot.undoCheckpoint;snapshot.undoBlockedReason=null;state.undoCheckpoint=snapshot;state.undoBlockedReason=null;};
@@ -427,6 +427,7 @@ export const legalSkillModes=(skill,phase)=>{
 function currentHex(state) { return state.map.find(h => h.q === state.player.q && h.r === state.player.r); }
 const movementCost=(state,hex)=>{
   if(hex?.site==='city')return 2;
+  if((state.bonuses?.terrainProhibition||[]).includes(hex?.terrain))return Infinity;
   const terrain=hex?.terrain,rules=state.bonuses?.movementRules||[];let base=TERRAIN_COST[state.time][terrain],reduction=(state.bonuses?.terrainReduction?.[terrain]||0)+(state.bonuses?.terrainCostReduction?.terrain===terrain?(state.bonuses.terrainCostReduction.reduction||0):0),minimum=state.bonuses?.terrainCostReduction?.terrain===terrain?state.bonuses.terrainCostReduction.minimum||0:0;
   for(const rule of rules){if(Object.prototype.hasOwnProperty.call(rule.replace||{},terrain))base=rule.replace[terrain];reduction+=rule.reduction?.[terrain]||0;const all=rule.all;if(all){if(Number.isFinite(all.replace))base=all.replace;reduction+=all.reduction||0;minimum=Math.max(minimum,all.minimum||0);}const traversable=rule.allTraversable;if(traversable&&Number.isFinite(base)){if(Number.isFinite(traversable.replace))base=traversable.replace;reduction+=traversable.reduction||0;minimum=Math.max(minimum,traversable.minimum||0);}}
   const hexReduction=state.bonuses?.hexCostReduction?.key===`${hex?.q}:${hex?.r}`?state.bonuses.hexCostReduction.reduction||0:0;minimum=Math.max(minimum,state.bonuses?.hexCostReduction?.key===`${hex?.q}:${hex?.r}`?state.bonuses.hexCostReduction.minimum||0:0);
@@ -467,11 +468,13 @@ function addEffect(state, effect, sidewaysAs, choices={}) {
     else if(type==='reduceHexCost')state.bonuses.hexCostReduction={key:`${choices.q}:${choices.r}`,reduction:amount.reduction,minimum:amount.minimum};
     else if(type==='reduceTerrainCost')state.bonuses.terrainCostReduction={terrain:choices.terrain,reduction:amount.reduction,minimum:amount.minimum};
     else if(type==='movementRule')state.bonuses.movementRules.push(clone(amount));
+    else if(type==='terrainProhibition')state.bonuses.terrainProhibition=[...new Set([...(state.bonuses.terrainProhibition||[]),...amount])];
     else if(type==='healOutsideCombat'){if(!state.phase.startsWith('combat-'))state.points.heal+=amount;}
     else if(type==='endTurnPlacement'){}
     else if(type==='moveConversion')state.bonuses.moveConversion={...(state.bonuses.moveConversion||{}),...amount};
     else if(type==='moveCardsInCombat')state.bonuses.moveCardsInCombat=Boolean(amount);
     else if(type==='ignoreRampagers')state.bonuses.ignoreRampagers=Boolean(amount);
+    else if(type==='ignoreFortifications')state.bonuses.ignoreFortifications=Boolean(amount);
     else if(type==='spaceBending')state.bonuses.spaceBending=Boolean(amount);
     else if(type==='timeBending')state.bonuses.timeBending=Boolean(amount);
     else if(type==='handLimitBonus')state.bonuses.handLimitBonus=(state.bonuses.handLimitBonus||0)+amount;
@@ -590,7 +593,7 @@ function wound(state, count) { woundPlayer(state.player,state,'effect',count); }
 export function legalMoves(state) {
   if(state.multiplayer&&state.viewerPlayerId&&state.viewerPlayerId!==state.activePlayerId)return [];
   if (state.phase !== 'action'||state.player.turnAction) return [];
-  return state.map.filter(h => h.revealed!==false&&[1,...(state.bonuses?.spaceBending?[2]:[])].includes(distance(state.player,h)) && (!h.enemy || SITES[h.site]?.kind==='adventure')&&Number.isFinite(movementCost(state,h)))
+  return state.map.filter(h => h.revealed!==false&&[1,...(state.bonuses?.spaceBending?[2]:[])].includes(distance(state.player,h)) && (!h.enemy || SITES[h.site]?.kind==='adventure'||(state.bonuses?.ignoreFortifications&&SITES[h.site]?.kind==='fortified'))&&Number.isFinite(movementCost(state,h)))
     .map(h => ({ ...h, cost: movementCost(state,h), legal: state.points.move >= movementCost(state,h) }));
 }
 const isOccupiedByOpponent=(state,hex)=>Boolean(state.multiplayer&&hex.site!=='portal'&&state.players.some(player=>player.id!==state.player.id&&player.q===hex.q&&player.r===hex.r));
@@ -799,7 +802,7 @@ export function reduceGame(input, action) {
       if (state.phase !== 'action') return fail(state, 'Finish combat before moving.');if(state.player.turnAction)return fail(state,'Movement must happen before your turn action.');
       const hex = state.map.find(h => h.q === action.q && h.r === action.r),moveDistance=hex?distance(state.player,hex):Infinity;if (!hex || (moveDistance!==1&&!(state.bonuses.spaceBending&&moveDistance===2))) return fail(state, state.bonuses.spaceBending?'Space Bending reaches only adjacent spaces or spaces two hexes away.':'You may only move to an adjacent revealed space.');
       if(hex.revealed===false)return fail(state,'Explore that map tile before moving onto it.');
-      if (hex.enemy && SITES[hex.site]?.kind!=='adventure') return fail(state, 'An enemy blocks that space. Start combat to enter it.');
+      if (hex.enemy && SITES[hex.site]?.kind!=='adventure'&&!(state.bonuses.ignoreFortifications&&SITES[hex.site]?.kind==='fortified')) return fail(state, 'An enemy blocks that space. Start combat to enter it.');
       const provoked=provokingEnemies(state,hex);
       if(isOccupiedByOpponent(state,hex)&&provoked.length)return fail(state,'You cannot enter an occupied space while provoking a rampaging enemy.');
       const cost = movementCost(state,hex); if (!Number.isFinite(cost)) return fail(state, 'That terrain is impassable.');

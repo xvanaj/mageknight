@@ -136,7 +136,7 @@ export const EXTENDED_SPELLS = [
   {id:'chill',name:'Chill',color:'blue',type:'spell',basic:{enemyControl:{skipAttack:true,removeFireResistance:true,exclude:'ice-resistant',excludeArcane:true}},strong:{enemyControl:{skipAttack:true,armorChange:-4,minimum:1,exclude:'ice-resistant',excludeArcane:true}}},
   {id:'mana-bolt',name:'Mana Bolt',color:'blue',type:'spell',basic:{manaBolt:8},strong:{manaBolt:11}},
   {id:'expose',name:'Expose',color:'white',type:'spell',basic:{ranged:2,exposeTarget:'both'},strong:{options:[{id:'fortification',label:'All enemies lose fortification; Ranged Attack 3',effect:{ranged:3,exposeAll:'fortification'}},{id:'resistances',label:'All enemies lose resistances; Ranged Attack 3',effect:{ranged:3,exposeAll:'resistances'}}]}},
-  {id:'underground-travel',name:'Underground Travel',color:'green',type:'spell',basic:{move:5},strong:{move:9}},
+  {id:'underground-travel',name:'Underground Travel',color:'green',type:'spell',basic:{move:3,movementRule:{all:{replace:1}},terrainProhibition:['swamp','lake'],ignoreRampagers:true},strong:{move:3,movementRule:{all:{replace:1}},terrainProhibition:['swamp','lake'],ignoreRampagers:true,ignoreFortifications:true}},
   {id:'wings-of-wind',name:'Wings of Wind',color:'white',type:'spell',basic:{move:5},strong:{move:8}},
   {id:'mana-claim',name:'Mana Claim',color:'white',type:'spell',competitive:true,basic:{mana:'crystal'},strong:{mana:'crystal',draw:3}},
   {id:'energy-flow',name:'Energy Flow',color:'green',type:'spell',competitive:true,basic:{energyFlow:{heal:false,opponentMaxLevel:2}},strong:{energyFlow:{heal:true,opponentMaxLevel:3}}},
