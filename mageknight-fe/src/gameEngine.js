@@ -144,6 +144,7 @@ const migrateState=state=>{
   const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.skipNextTurn=Boolean(player.skipNextTurn);player.roundOrderFaceDown=Boolean(player.roundOrderFaceDown);player.cardsPlayedThisTurn=player.cardsPlayedThisTurn??player.played?.length??0;player.atTurnStart=Boolean(player.atTurnStart);player.emptyHandPassAllowed=Boolean(player.emptyHandPassAllowed);player.movedThisTurn=Boolean(player.movedThisTurn);player.moveHistory=player.moveHistory||[];player.turnAction=player.turnAction||null;player.cityInfluenceApplied=Boolean(player.cityInfluenceApplied);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0,banner:unit.banner?{...unit.banner,used:Boolean(unit.banner.used)}:null}));});
   state.scenarioFinalTurnsStarted=Boolean(state.scenarioFinalTurnsStarted);
   state.levelUpContext=state.levelUpContext||null;
+  state.endTurnContext=state.endTurnContext||null;
   state.enemyDiscards=state.enemyDiscards||{};Object.keys(ENEMY_POOLS).forEach(category=>{state.enemyDiscards[category]=state.enemyDiscards[category]||[];});
   state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.enemyDiscards=state.enemyDiscards||{};state.enemyDiscards.brown=state.enemyDiscards.brown||[];state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;state.roundWasAnnounced=Boolean(state.roundWasAnnounced);state.undoBlockedReason=state.undoBlockedReason||null;state.removedTactics=state.removedTactics||{day:[],night:[]};state.removedTactics.day=state.removedTactics.day||[];state.removedTactics.night=state.removedTactics.night||[];state.pendingTacticRemoval=state.pendingTacticRemoval||null;state.commonSkills=state.commonSkills||[];if(state.pvp?.prepared)Object.keys(state.pvp.prepared).forEach(id=>{state.pvp.prepared[id]={...freshPoints(),...state.pvp.prepared[id]};});if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.damageAssignedUnitIds=state.combat.damageAssignedUnitIds||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
 };
@@ -228,7 +229,7 @@ export function createGame(seed = 20260901, options = {}) {
     player:makePlayer(seed,character),
     skillDeck:shuffled(clone(profile.skills||TOVAK_SKILLS),seed+71), skillChoices:[], commonSkills:[],
     points: freshPoints(), mana: [], sourceTaken: false, combat: null, pendingRewards:[], bonuses:{sideways:null,manaOverload:null}, log: [], error: null,
-    scoring:null,pvp:null,cooperativeAssault:null,levelUpContext:null,scenarioEndTurnsRemaining:null,scenarioFinalTurnsStarted:false,roundWasAnnounced:false,removedTactics:{day:[],night:[]},pendingTacticRemoval:null,
+    scoring:null,pvp:null,cooperativeAssault:null,levelUpContext:null,endTurnContext:null,scenarioEndTurnsRemaining:null,scenarioFinalTurnsStarted:false,roundWasAnnounced:false,removedTactics:{day:[],night:[]},pendingTacticRemoval:null,
   };
   state.player.atTurnStart=!options.tactics;
   setupRuins(state);
@@ -325,7 +326,7 @@ function advanceLevels(state){
 function beginLevelUp(state,context){if(!advanceLevels(state))return false;state.levelUpContext=context;state.phase='level-up';return true;}
 function resumeLevelUp(state){
   const context=state.levelUpContext;if(!context)return state;if(advanceLevels(state)){state.phase='level-up';return state;}state.levelUpContext=null;
-  if(context.type==='end-turn'){state.phase='action';return endTurn(state,context.roundAnnouncement,true);}
+  if(context.type==='end-turn'){state.phase='action';return endTurn(state,context.roundAnnouncement,'after-level');}
   if(context.type==='pvp'){const actor=playerById(state,context.playerId);if(actor)finishPvpReaction(state,state.pvp);state.pvp=null;state.phase='action';bindPlayerState(state,context.aggressorId);log(state,`${actor?.name||'The defender'} completed the fully attended PvP turn.`);return state;}
   if(context.type==='cooperative-after'){const actor=playerById(state,context.playerId);return completeCooperativeAfterStep(state,actor,true);}
   return state;
@@ -412,8 +413,8 @@ export function reduceGame(input, action) {
       log(state,`Learned ${skill.name}${advanced?` and gained ${advanced.name}`:''}.`);if(state.levelUpContext)return resumeLevelUp(state);return state;
     }
     case 'USE_SKILL': {const result=activateSkill(state,action);if(!result.error)result.player.atTurnStart=false;return result;}
-    case 'PREPARE_REWARD': return prepareReward(state);
-    case 'CLAIM_REWARD': return claimReward(state,action);
+    case 'PREPARE_REWARD': if(state.phase!=='end-rewards')return fail(state,'Combat rewards are claimed during end-of-turn processing.');return prepareReward(state);
+    case 'CLAIM_REWARD': {if(state.phase!=='end-rewards')return fail(state,'Combat rewards are claimed during end-of-turn processing.');const result=claimReward(state,action);if(result.error||result.pendingRewards.length)return result;return endTurn(result,result.endTurnContext?.roundAnnouncement,'after-rewards');}
     case 'TAKE_SOURCE': {
       if (state.sourceTaken) return fail(state, 'Only one Source die may be used per turn.');
       const die = state.source.find(d => d.id === action.id); if (!die) return fail(state, 'Unknown Source die.');
@@ -568,7 +569,7 @@ export function reduceGame(input, action) {
       if(nonWounds.length){const chosen=nonWounds.find(card=>card.uid===action.cardUid)||nonWounds[0],woundIds=new Set(action.woundUids||wounds.map(card=>card.uid));state.player.hand=state.player.hand.filter(card=>{if(card.uid===chosen.uid||(card.id==='wound'&&woundIds.has(card.uid))){state.player.discard.push(card);return false;}return true;});log(state,`Standard rest: discarded ${chosen.name} and ${woundIds.size} Wound${woundIds.size===1?'':'s'}.`);}else{const chosen=wounds.find(card=>card.uid===action.woundUid)||wounds[0];state.player.hand=state.player.hand.filter(card=>{if(card.uid===chosen.uid){state.player.discard.push(card);return false;}return true;});log(state,'Slow recovery: discarded one Wound.');}return endTurn(state);
     }
     case 'END_TURN': {
-      if(state.phase!=='action')return fail(state,'Combat must be completed first.');if(state.pendingRewards.length)return fail(state,'Claim your pending site rewards before ending the turn.');const requested=[...new Set(action.discardUids||[])],cards=requested.map(uid=>state.player.hand.find(card=>card.uid===uid&&card.id!=='wound'));if(cards.some(card=>!card)||cards.length!==requested.length)return fail(state,'Only non-Wound cards from your hand may be discarded at end of turn.');if(!state.player.cardsPlayedThisTurn&&!cards.length&&!state.player.emptyHandPassAllowed)return fail(state,'Discard at least one non-Wound card when no card was played this turn.');for(const card of cards){state.player.hand.splice(state.player.hand.findIndex(item=>item.uid===card.uid),1);state.player.discard.push(card);}return endTurn(state);
+      if(state.phase!=='action')return fail(state,'Combat must be completed first.');const requested=[...new Set(action.discardUids||[])],cards=requested.map(uid=>state.player.hand.find(card=>card.uid===uid&&card.id!=='wound'));if(cards.some(card=>!card)||cards.length!==requested.length)return fail(state,'Only non-Wound cards from your hand may be discarded at end of turn.');if(!state.player.cardsPlayedThisTurn&&!cards.length&&!state.player.emptyHandPassAllowed)return fail(state,'Discard at least one non-Wound card when no card was played this turn.');for(const card of cards){state.player.hand.splice(state.player.hand.findIndex(item=>item.uid===card.uid),1);state.player.discard.push(card);}return endTurn(state);
     }
     case 'END_ROUND': {
       if(state.player.deck.length||!state.player.atTurnStart) return fail(state,'You may announce end of round only when your Deed deck was empty at the start of your turn.');
@@ -843,16 +844,18 @@ function applyForcedWithdrawal(state){
   return hex;
 }
 
-function endTurn(state,roundAnnouncement=false,resume=false) {
-  const hex=resume?currentHex(state):applyForcedWithdrawal(state);
-  if(!resume&&beginLevelUp(state,{type:'end-turn',playerId:state.player.id||null,roundAnnouncement}))return state;
-  state.levelUpContext=null;
-  const immediateExtraTurn=Boolean(state.player.extraTurn);state.player.extraTurn=false;
-  const carry=state.player.carry;state.player.carry=null;
-  if(!roundAnnouncement&&hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
-  if(!roundAnnouncement&&hex?.site==='glade'&&state.player.wounds>0){const before=state.player.hand.length+state.player.discard.length;removeWounds(state,1);if(state.player.hand.length+state.player.discard.length<before){state.player.wounds--;log(state,'The magical glade removed one Wound.');}}
-  state.player.discard.push(...state.player.played); state.player.played=[];state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=false;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.moveHistory=[];state.player.turnAction=null;state.player.cityInfluenceApplied=false;state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value); state.mana=[]; state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;
-  state.player.skills.forEach(s=>s.used=false); const target=handLimit(state); if(!roundAnnouncement&&state.player.hand.length<target)draw(state,target-state.player.hand.length);
+function endTurn(state,roundAnnouncement=false,stage='start') {
+  if(stage==='start'){
+    const hex=applyForcedWithdrawal(state),immediateExtraTurn=Boolean(state.player.extraTurn),carry=state.player.carry;state.player.extraTurn=false;state.player.carry=null;
+    state.player.discard.push(...state.player.played);state.player.played=[];state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=false;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.moveHistory=[];state.player.turnAction=null;state.player.cityInfluenceApplied=false;state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value);state.mana=[];state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;state.player.skills.forEach(skill=>{skill.used=false;});
+    if(!roundAnnouncement&&hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
+    if(!roundAnnouncement&&hex?.site==='glade'&&state.player.wounds>0){const before=state.player.hand.length+state.player.discard.length;removeWounds(state,1);if(state.player.hand.length+state.player.discard.length<before){state.player.wounds--;log(state,'The magical glade removed one Wound.');}}
+    state.endTurnContext={playerId:state.player.id||null,roundAnnouncement,immediateExtraTurn};
+    if(state.pendingRewards.length){state.phase='end-rewards';log(state,`${state.player.name} must claim combat rewards before leveling and drawing cards.`);return state;}
+  }
+  const context=state.endTurnContext||{playerId:state.player.id||null,roundAnnouncement,immediateExtraTurn:false};roundAnnouncement=context.roundAnnouncement;
+  if(stage!=='after-level'&&beginLevelUp(state,{type:'end-turn',playerId:context.playerId,roundAnnouncement}))return state;
+  state.levelUpContext=null;state.phase='action';const immediateExtraTurn=Boolean(context.immediateExtraTurn),hex=currentHex(state),target=handLimit(state);state.endTurnContext=null;if(!roundAnnouncement&&state.player.hand.length<target)draw(state,target-state.player.hand.length);
   if(!roundAnnouncement&&hex?.site==='glade')state.mana.push(state.time==='day'?'gold':'black');
   state.turn++;
   if(state.multiplayer){
