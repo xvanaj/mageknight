@@ -294,6 +294,12 @@ const EFFECT_PHASES = {
   armorBreak:['combat-ranged','combat-block','combat-attack'],
 };
 const effectAllowedInPhase=(effect,phase)=>(EFFECT_PHASES[effect]||[]).includes(phase);
+export const legalCardEffectTypes=(effect={},phase)=>{
+  if(effect.any)return ['move','influence','attack','block'].filter(type=>effectAllowedInPhase(type,phase));
+  if(effect.anyCombat)return ['ranged','siege','attack','block'].filter(type=>effectAllowedInPhase(type,phase));
+  const primary=Object.keys(effect).find(type=>EFFECT_PHASES[type]);
+  return primary&&effectAllowedInPhase(primary,phase)?[primary]:[];
+};
 export const legalUnitAbilities=(unit,phase)=>Object.keys(unit?.ability||{}).filter(effect=>effectAllowedInPhase(effect,phase));
 export const legalSkillModes=(skill,phase)=>{
   if(skill?.effect==='any')return ['move','influence','attack','block'].filter(effect=>effectAllowedInPhase(effect,phase));
@@ -454,21 +460,21 @@ export function reduceGame(input, action) {
       const index = state.player.hand.findIndex(c => c.uid === action.uid); if (index < 0) return fail(state, 'That card is not in your hand.');
       const card = state.player.hand[index]; if (card.id === 'wound') return fail(state, 'Wounds cannot be played.');
       const effect=card[action.mode]||{};
-      if(effect.any&&!['move','influence','attack','block'].includes(action.effectAs))return fail(state,'Choose Move, Influence, Attack, or Block for this flexible effect.');
-      if(effect.anyCombat&&!['ranged','siege','attack','block'].includes(action.effectAs))return fail(state,'Choose a combat power for this flexible effect.');
+      if(action.mode==='sideways'){
+        const legalSideways=['move','influence','attack','block'].filter(type=>effectAllowedInPhase(type,state.phase));
+        if(!legalSideways.includes(action.as))return fail(state,`Choose a sideways effect available in the ${state.phase.replace('combat-','')} phase.`);
+      }else{
+        const legalEffects=legalCardEffectTypes(effect,state.phase);
+        if(effect.any&&!legalEffects.includes(action.effectAs))return fail(state,legalEffects.length?`Choose ${legalEffects.join(' or ')} for this flexible effect.`:'This flexible action is not available in this phase.');
+        if(effect.anyCombat&&!legalEffects.includes(action.effectAs))return fail(state,legalEffects.length?`Choose ${legalEffects.join(' or ')} for this flexible combat effect.`:'This combat action is not available in this phase.');
+        if(!effect.any&&!effect.anyCombat&&!legalEffects.length)return fail(state,`That card action cannot be committed in the ${state.phase.replace('combat-','')} phase.`);
+      }
       if(effect.mana&&!COLORS.includes(action.manaColor))return fail(state,'Choose a basic mana color to gain.');
       if(effect.unitReady&&!state.player.units.some(unit=>unit.id===action.unitId&&unit.spent))return fail(state,'Choose a spent Unit to ready.');
       if(effect.discardRequired&&!state.player.hand.some(item=>item.uid===action.discardUid&&item.uid!==card.uid&&item.id!=='wound'))return fail(state,'Choose another non-Wound card to discard as the cost.');
-      const combatStat = {'combat-ranged':['ranged','siege'],'combat-block':['block','iceBlock','fireBlock','coldfireBlock'],'combat-attack':['attack','iceAttack','fireAttack','coldfireAttack','ranged','siege']}[state.phase];
-      if (combatStat) {
-        const offered = action.mode === 'sideways' ? action.as : [action.effectAs,...Object.keys(effect).filter(k => effect[k])].filter(Boolean);
-        const offeredStats = Array.isArray(offered) ? offered : [offered];
-        if (!offeredStats.some(k => combatStat.includes(k))) return fail(state, `Only ${combatStat.join(' or ')} effects may be committed in this combat phase.`);
-      }
       if(card.type==='spell'){
         if(action.mode==='sideways'){}else if(action.mode==='basic'){if(!canSpendMana(state,card.color))return fail(state,`Casting this Spell requires ${card.color} mana.`);spendMana(state,card.color);}else if(action.mode==='strong'){if(effectiveTime(state)!=='night')return fail(state,'The strong Spell effect can only be cast at Night.');if(!canSpendMana(state,card.color)||!state.mana.includes('black'))return fail(state,`The strong Spell requires ${card.color} and black mana.`);spendMana(state,card.color);state.mana.splice(state.mana.indexOf('black'),1);}else return fail(state,'Choose a Spell effect.');
       } else if(card.type!=='artifact'&&action.mode==='strong'&&!spendMana(state,card.color))return fail(state,`The strong action requires ${card.color} mana.`);
-      if (action.mode === 'sideways' && !['move','influence','attack','block'].includes(action.as)) return fail(state, 'A sideways card provides Move, Influence, Attack, or Block 1.');
       if(action.mode==='sideways'&&state.bonuses.sideways?.advancedValue&&['advanced','spell','artifact'].includes(card.type))state.bonuses.sideways.value=state.bonuses.sideways.advancedValue;
       addEffect(state, effect, action.mode === 'sideways' ? action.as : null,action);
       if(action.mode==='strong'&&state.bonuses.manaOverload?.color===card.color){const stat=['move','influence','attack','block'].find(k=>(card.strong||{})[k]);if(stat){state.points[stat]+=4;log(state,`Mana Overload adds ${stat} 4.`);}state.bonuses.manaOverload=null;}
