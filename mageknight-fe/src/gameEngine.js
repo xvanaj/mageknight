@@ -143,6 +143,7 @@ const migrateState=state=>{
   state.points={...freshPoints(),...(state.points||{})};
   const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.skipNextTurn=Boolean(player.skipNextTurn);player.roundOrderFaceDown=Boolean(player.roundOrderFaceDown);player.cardsPlayedThisTurn=player.cardsPlayedThisTurn??player.played?.length??0;player.atTurnStart=Boolean(player.atTurnStart);player.emptyHandPassAllowed=Boolean(player.emptyHandPassAllowed);player.movedThisTurn=Boolean(player.movedThisTurn);player.moveHistory=player.moveHistory||[];player.turnAction=player.turnAction||null;player.cityInfluenceApplied=Boolean(player.cityInfluenceApplied);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0,banner:unit.banner?{...unit.banner,used:Boolean(unit.banner.used)}:null}));});
   state.scenarioFinalTurnsStarted=Boolean(state.scenarioFinalTurnsStarted);
+  state.levelUpContext=state.levelUpContext||null;
   state.enemyDiscards=state.enemyDiscards||{};Object.keys(ENEMY_POOLS).forEach(category=>{state.enemyDiscards[category]=state.enemyDiscards[category]||[];});
   state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.enemyDiscards=state.enemyDiscards||{};state.enemyDiscards.brown=state.enemyDiscards.brown||[];state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;state.roundWasAnnounced=Boolean(state.roundWasAnnounced);state.undoBlockedReason=state.undoBlockedReason||null;state.removedTactics=state.removedTactics||{day:[],night:[]};state.removedTactics.day=state.removedTactics.day||[];state.removedTactics.night=state.removedTactics.night||[];state.pendingTacticRemoval=state.pendingTacticRemoval||null;state.commonSkills=state.commonSkills||[];if(state.pvp?.prepared)Object.keys(state.pvp.prepared).forEach(id=>{state.pvp.prepared[id]={...freshPoints(),...state.pvp.prepared[id]};});if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.damageAssignedUnitIds=state.combat.damageAssignedUnitIds||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
 };
@@ -227,7 +228,7 @@ export function createGame(seed = 20260901, options = {}) {
     player:makePlayer(seed,character),
     skillDeck:shuffled(clone(profile.skills||TOVAK_SKILLS),seed+71), skillChoices:[], commonSkills:[],
     points: freshPoints(), mana: [], sourceTaken: false, combat: null, pendingRewards:[], bonuses:{sideways:null,manaOverload:null}, log: [], error: null,
-    scoring:null,pvp:null,cooperativeAssault:null,scenarioEndTurnsRemaining:null,scenarioFinalTurnsStarted:false,roundWasAnnounced:false,removedTactics:{day:[],night:[]},pendingTacticRemoval:null,
+    scoring:null,pvp:null,cooperativeAssault:null,levelUpContext:null,scenarioEndTurnsRemaining:null,scenarioFinalTurnsStarted:false,roundWasAnnounced:false,removedTactics:{day:[],night:[]},pendingTacticRemoval:null,
   };
   state.player.atTurnStart=!options.tactics;
   setupRuins(state);
@@ -317,13 +318,17 @@ function spendMana(state, color) {
   return false;
 }
 const canSpendMana=(state,color)=>state.mana.includes(color)||(state.time==='day'&&state.mana.includes('gold'))||(state.player.crystals[color]||0)>0;
-function gainFame(state, amount) {
-  const old = state.player.level; state.player.fame += amount;if(state.scenario==='blitz-conquest'){let previous=old,current=levelFor(state.player.fame);while(current>previous){state.player.fame+=current-previous;previous=current;current=levelFor(state.player.fame);}}state.player.level = levelFor(state.player.fame);
-  for(let level=old+1;level<=state.player.level;level++) {
-    if(level%2===1){state.player.command++;state.player.armor++;}
-    else if(state.skillDeck.length){lockUndo(state,'New Skill choices were revealed.');state.skillChoices.splice(0,state.skillChoices.length,...state.skillDeck.splice(0,Math.min(2,state.skillDeck.length)));if(state.multiplayer&&state.players.length===1&&state.dummy?.skillDeck?.length){const dummySkill=state.dummy.skillDeck.shift();state.commonSkills.push(dummySkill);log(state,`${state.dummy.name} added ${dummySkill.name} to the Common Skills offer.`);}}
-    log(state, `Level up! You reached level ${level}${level%2===0?' and may choose a Skill.':'.'}`);
-  }
+function gainFame(state, amount) { state.player.fame+=amount; }
+function advanceLevels(state){
+  let target=levelFor(state.player.fame);while(state.player.level<target){const level=++state.player.level;if(state.scenario==='blitz-conquest'){state.player.fame++;target=levelFor(state.player.fame);}if(level%2===1){state.player.command++;state.player.armor++;}else if(state.skillDeck.length){lockUndo(state,'New Skill choices were revealed.');state.skillChoices.splice(0,state.skillChoices.length,...state.skillDeck.splice(0,Math.min(2,state.skillDeck.length)));if(state.multiplayer&&state.players.length===1&&state.dummy?.skillDeck?.length){const dummySkill=state.dummy.skillDeck.shift();state.commonSkills.push(dummySkill);log(state,`${state.dummy.name} added ${dummySkill.name} to the Common Skills offer.`);}log(state,`Level up! You reached level ${level} and must choose a Skill.`);return true;}log(state,`Level up! You reached level ${level}.`);}return false;
+}
+function beginLevelUp(state,context){if(!advanceLevels(state))return false;state.levelUpContext=context;state.phase='level-up';return true;}
+function resumeLevelUp(state){
+  const context=state.levelUpContext;if(!context)return state;if(advanceLevels(state)){state.phase='level-up';return state;}state.levelUpContext=null;
+  if(context.type==='end-turn'){state.phase='action';return endTurn(state,context.roundAnnouncement,true);}
+  if(context.type==='pvp'){const actor=playerById(state,context.playerId);if(actor)finishPvpReaction(state,state.pvp);state.pvp=null;state.phase='action';bindPlayerState(state,context.aggressorId);log(state,`${actor?.name||'The defender'} completed the fully attended PvP turn.`);return state;}
+  if(context.type==='cooperative-after'){const actor=playerById(state,context.playerId);return completeCooperativeAfterStep(state,actor,true);}
+  return state;
 }
 function wound(state, count) { state.player.wounds += count; for (let i=0;i<count;i++) state.player.hand.push({ id:'wound', uid:`wound-${state.turn}-${i}-${state.player.wounds}`, name:'Wound', color:'wound', basic:{}, strong:{} }); }
 
@@ -371,8 +376,10 @@ export function reduceGame(input, action) {
     const actorId=action.playerId;
     if(!actorId||!state.players.some(player=>player.id===actorId))return fail(state,'Unknown multiplayer actor.');
     if(action.type.startsWith('TEAM_')||(action.type!=='INITIATE_PVP'&&action.type.startsWith('PVP_')))return contributeRemote(state,action);
+    const resolvingLevel=state.phase==='level-up'&&state.levelUpContext?.playerId===actorId;
+    if(state.phase==='level-up'&&(!resolvingLevel||action.type!=='SELECT_SKILL'))return fail(state,'The leveling player must choose a Skill before play continues.');
     if(state.phase==='tactic'&&!['SELECT_TACTIC','UNASSIGN_BANNER'].includes(action.type))return fail(state,'Every player must choose a tactic first.');
-    if(state.phase!=='tactic'&&actorId!==state.activePlayerId)return fail(state,'It is not your turn.');
+    if(state.phase!=='tactic'&&actorId!==state.activePlayerId&&!resolvingLevel)return fail(state,'It is not your turn.');
     bindPlayerState(state,actorId);
   }
   switch (action.type) {
@@ -402,7 +409,7 @@ export function reduceGame(input, action) {
       state.player.skills.push({...skill,used:false});if(commonSkill){state.commonSkills=state.commonSkills.filter(s=>s.id!==action.id);state.commonSkills.push(...state.skillChoices);}else state.commonSkills.push(...state.skillChoices.filter(s=>s.id!==action.id));state.skillChoices.splice(0);
       state.offer.advanced=state.offer.advanced.filter(card=>card.id!==advanced.id);state.player.deck.unshift(cardWithUid(advanced,state));
       if(state.decks.advanced.length)state.offer.advanced.push(state.decks.advanced.shift());
-      log(state,`Learned ${skill.name}${advanced?` and gained ${advanced.name}`:''}.`); return state;
+      log(state,`Learned ${skill.name}${advanced?` and gained ${advanced.name}`:''}.`);if(state.levelUpContext)return resumeLevelUp(state);return state;
     }
     case 'USE_SKILL': {const result=activateSkill(state,action);if(!result.error)result.player.atTurnStart=false;return result;}
     case 'PREPARE_REWARD': return prepareReward(state);
@@ -629,7 +636,7 @@ function contributeRemote(state,action){
       if(assault.stage!=='after'||actor.id!==assault.afterOrder[assault.afterIndex])return fail(state,'It is not your post-assault recovery.');bindPlayerState(state,actor.id);if(action.unitId){const unit=actor.units.find(item=>item.id===action.unitId&&item.wounded),cost=unit?.level||1;if(!unit)return fail(state,'That Unit is not wounded.');if(state.points.heal<cost)return fail(state,`Healing that Unit requires ${cost} Heal.`);state.points.heal-=cost;unit.woundCount=Math.max(0,(unit.woundCount||1)-1);unit.wounded=unit.woundCount>0;return state;}if(actor.wounds<1)return fail(state,'You have no Wound to heal.');if(state.points.heal<1)return fail(state,'You need 1 Heal.');state.points.heal--;actor.wounds--;removeWounds(state,1);return state;
     }
     if(action.type==='TEAM_END_AFTER'){
-      if(assault.stage!=='after'||actor.id!==assault.afterOrder[assault.afterIndex])return fail(state,'It is not your post-assault recovery.');bindPlayerState(state,actor.id);assault.resources[actor.id]={points:clone(state.points),mana:[...state.mana],sourceTaken:state.sourceTaken};if(actor.id!==assault.leaderId)finishCooperativeReaction(state,actor);if(assault.afterIndex<assault.afterOrder.length-1){assault.afterIndex++;const nextId=assault.afterOrder[assault.afterIndex],resources=assault.resources[nextId];state.activePlayerId=nextId;bindPlayerState(state,nextId);state.points=resources?.points||freshPoints();state.mana=resources?.mana||[];state.sourceTaken=Boolean(resources?.sourceTaken);state.phase='cooperative-after';log(state,`${state.player.name} may now recover and end the advanced assault turn.`);return state;}const leaderId=assault.leaderId,leaderResources=assault.resources[leaderId];state.activePlayerId=leaderId;bindPlayerState(state,leaderId);state.points=leaderResources?.points||freshPoints();state.mana=leaderResources?.mana||[];state.sourceTaken=Boolean(leaderResources?.sourceTaken);state.phase='action';state.cooperativeAssault=null;return endTurn(state);
+      if(assault.stage!=='after'||actor.id!==assault.afterOrder[assault.afterIndex])return fail(state,'It is not your post-assault recovery.');bindPlayerState(state,actor.id);return completeCooperativeAfterStep(state,actor);
     }
     return fail(state,'That joint-assault action is not available now.');
   }
@@ -667,7 +674,7 @@ function resolvePvpAction(state,action,actor){
     if(state.phase!=='pvp-after'||actor.id!==pvp.defenderId)return fail(state,'Healing is no longer available.');if(action.unitId){const unit=actor.units.find(item=>item.id===action.unitId&&item.wounded),cost=unit?.level||1;if(!unit)return fail(state,'That Unit is not wounded.');if(pvp.defenderHeal<cost)return fail(state,`Healing that Unit requires ${cost} Heal.`);pvp.defenderHeal-=cost;unit.woundCount=Math.max(0,(unit.woundCount||1)-1);unit.wounded=unit.woundCount>0;return state;}if(actor.wounds<1)return fail(state,'You have no Wound to heal.');if(pvp.defenderHeal<1)return fail(state,'You need 1 Heal.');pvp.defenderHeal--;actor.wounds--;const pile=[actor.hand,actor.discard].find(cards=>cards.some(card=>card.id==='wound'));if(pile)pile.splice(pile.findIndex(card=>card.id==='wound'),1);return state;
   }
   if(action.type==='PVP_END_REACTION'){
-    if(state.phase!=='pvp-after'||actor.id!==pvp.defenderId)return fail(state,'Only the fully attending defender may end this reaction.');finishPvpReaction(state,pvp);const aggressorId=pvp.attackerId;state.pvp=null;state.phase='action';bindPlayerState(state,aggressorId);log(state,`${actor.name} completed the fully attended PvP turn.`);return state;
+    if(state.phase!=='pvp-after'||actor.id!==pvp.defenderId)return fail(state,'Only the fully attending defender may end this reaction.');bindPlayerState(state,actor.id);if(beginLevelUp(state,{type:'pvp',playerId:actor.id,aggressorId:pvp.attackerId}))return state;finishPvpReaction(state,pvp);const aggressorId=pvp.attackerId;state.pvp=null;state.phase='action';bindPlayerState(state,aggressorId);log(state,`${actor.name} completed the fully attended PvP turn.`);return state;
   }
   if(action.type==='PVP_TAKE_SOURCE'){
     if(actor.id!==pvp.defenderId||pvp.attendance!=='full')return fail(state,'Only a fully attending defender may use the Source.');if(pvp.defenderSourceTaken)return fail(state,'The defender has already used a Source die.');const die=state.source.find(item=>item.id===action.id);if(!die)return fail(state,'Unknown Source die.');if(die.color==='black'&&state.time==='day')return fail(state,'Black mana cannot be used during the Day.');if(die.color==='gold'&&state.time==='night')return fail(state,'Gold mana cannot be used during the Night.');lockUndo(state,'A Source die was rerolled during PvP.');pvp.defenderMana=pvp.defenderMana||[];pvp.defenderMana.push(die.color);pvp.defenderSourceTaken=true;const faces=[...COLORS,'gold','black'];die.color=faces[(state.seed+state.turn*11+Number(die.id.slice(-1)))%faces.length];log(state,`${actor.name} used a Source die while fully attending PvP.`);return state;
@@ -740,6 +747,13 @@ function finishCooperativeBattle(state){
 function finishCooperativeReaction(state,participant){
   const hex=currentHex(state);if(hex?.site==='mine'){const color=hex.mineColor;if(participant.crystals[color]<3)participant.crystals[color]++;}if(hex?.site==='glade'&&participant.wounds>0){const before=participant.hand.length+participant.discard.length;removeWounds(state,1);if(participant.hand.length+participant.discard.length<before)participant.wounds--;}
   participant.discard.push(...participant.played);participant.played=[];participant.cardsPlayedThisTurn=0;participant.atTurnStart=false;participant.emptyHandPassAllowed=false;participant.movedThisTurn=false;participant.moveHistory=[];participant.turnAction=null;participant.cityInfluenceApplied=false;participant.skills.forEach(skill=>{skill.used=false;});const target=handLimit(state);if(participant.hand.length<target)draw(state,target-participant.hand.length);
+}
+
+function completeCooperativeAfterStep(state,actor,resume=false){
+  const assault=state.cooperativeAssault;if(!assault||!actor)return fail(state,'That joint-assault recovery is no longer available.');if(!resume&&beginLevelUp(state,{type:'cooperative-after',playerId:actor.id}))return state;
+  assault.resources[actor.id]={points:clone(state.points),mana:[...state.mana],sourceTaken:state.sourceTaken};if(actor.id!==assault.leaderId)finishCooperativeReaction(state,actor);
+  if(assault.afterIndex<assault.afterOrder.length-1){assault.afterIndex++;const nextId=assault.afterOrder[assault.afterIndex],resources=assault.resources[nextId];state.activePlayerId=nextId;bindPlayerState(state,nextId);state.points=resources?.points||freshPoints();state.mana=resources?.mana||[];state.sourceTaken=Boolean(resources?.sourceTaken);state.phase='cooperative-after';log(state,`${state.player.name} may now recover and end the advanced assault turn.`);return state;}
+  const leaderId=assault.leaderId,leaderResources=assault.resources[leaderId];state.activePlayerId=leaderId;bindPlayerState(state,leaderId);state.points=leaderResources?.points||freshPoints();state.mana=leaderResources?.mana||[];state.sourceTaken=Boolean(leaderResources?.sourceTaken);state.phase='action';state.cooperativeAssault=null;return endTurn(state);
 }
 
 function leaveCombatWithSurvivors(state){
@@ -829,8 +843,10 @@ function applyForcedWithdrawal(state){
   return hex;
 }
 
-function endTurn(state,roundAnnouncement=false) {
-  const hex=applyForcedWithdrawal(state);
+function endTurn(state,roundAnnouncement=false,resume=false) {
+  const hex=resume?currentHex(state):applyForcedWithdrawal(state);
+  if(!resume&&beginLevelUp(state,{type:'end-turn',playerId:state.player.id||null,roundAnnouncement}))return state;
+  state.levelUpContext=null;
   const immediateExtraTurn=Boolean(state.player.extraTurn);state.player.extraTurn=false;
   const carry=state.player.carry;state.player.carry=null;
   if(!roundAnnouncement&&hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
