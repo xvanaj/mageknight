@@ -150,7 +150,7 @@ export const CONTENT_COUNTS={advancedActions:ADVANCED_CARDS.length,spells:SPELL_
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const migrateState=state=>{
-  const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
+  const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.skipNextTurn=Boolean(player.skipNextTurn);player.roundOrderFaceDown=Boolean(player.roundOrderFaceDown);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
   state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.enemyDiscards=state.enemyDiscards||{};state.enemyDiscards.brown=state.enemyDiscards.brown||[];state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
 };
 const enemyGroup=members=>{const list=members.map(clone);return {id:list.map(enemy=>enemy.id).join('+'),uid:list.map(enemy=>enemy.uid||enemy.id).join('|'),name:list.length>1?`${list.length} defenders`:list[0].name,armor:list.reduce((sum,enemy)=>sum+enemy.armor,0),attack:list.reduce((sum,enemy)=>sum+enemy.attack,0),fame:list.reduce((sum,enemy)=>sum+enemy.fame,0),traits:[...new Set(list.flatMap(enemy=>enemy.traits||[]))],members:list};};
@@ -163,6 +163,7 @@ const effectiveBlock=(state,enemy)=>{const traits=enemy.traits||[];const physica
 const blockEnemyKey=enemy=>enemy.summonerId||enemyKey(enemy);
 const attackingCombatEnemies=state=>state.combat?.blockEnemies||livingCombatEnemies(state);
 const distance = (a, b) => (Math.abs(a.q-b.q) + Math.abs(a.r-b.r) + Math.abs((-a.q-a.r)-(-b.q-b.r))) / 2;
+const playerById=(state,id)=>state.players.find(player=>player.id===id);
 const shuffled = (items, seed) => {
   const result = [...items]; let x = seed >>> 0;
   for (let i = result.length - 1; i > 0; i--) { x = (1664525*x + 1013904223) >>> 0; const j = x % (i+1); [result[i], result[j]] = [result[j], result[i]]; }
@@ -197,7 +198,7 @@ const makePlayer=(seed,character='tovak',name)=>{
   const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
   const cards=applyCharacterDeck(CARDS,character);
   const deck=shuffled(cards.map((card,index)=>({...clone(card),uid:`${card.id}-${index}`})),seed);
-  return {name:profile.name||name||'Mage Knight',character,q:0,r:0,fame:0,reputation:0,level:1,armor:profile.armor||2,command:1,deck:deck.slice(5),hand:deck.slice(0,5),discard:[],played:[],removed:[],wounds:0,crystals:{blue:0,red:0,green:0,white:0},units:[],keeps:0,cities:0,skills:[],defeated:[],assaults:0,pvpWins:0,tactic:null,tacticUsed:false,extraTurn:false,carry:null};
+  return {name:profile.name||name||'Mage Knight',character,q:0,r:0,fame:0,reputation:0,level:1,armor:profile.armor||2,command:1,deck:deck.slice(5),hand:deck.slice(0,5),discard:[],played:[],removed:[],wounds:0,crystals:{blue:0,red:0,green:0,white:0},units:[],keeps:0,cities:0,skills:[],defeated:[],assaults:0,pvpWins:0,tactic:null,tacticUsed:false,extraTurn:false,carry:null,skipNextTurn:false,roundOrderFaceDown:false};
 };
 
 export function createGame(seed = 20260901, options = {}) {
@@ -330,7 +331,7 @@ export function reduceGame(input, action) {
   if(state.multiplayer){
     const actorId=action.playerId;
     if(!actorId||!state.players.some(player=>player.id===actorId))return fail(state,'Unknown multiplayer actor.');
-    if(['TEAM_CONTRIBUTE','PVP_DEFEND','PVP_RETREAT'].includes(action.type))return contributeRemote(state,action);
+    if(['TEAM_CONTRIBUTE','PVP_ATTEND','PVP_DEFEND','PVP_RETREAT'].includes(action.type))return contributeRemote(state,action);
     if(state.phase==='tactic'&&action.type!=='SELECT_TACTIC')return fail(state,'Every player must choose a tactic first.');
     if(state.phase!=='tactic'&&actorId!==state.activePlayerId)return fail(state,'It is not your turn.');
     bindPlayerState(state,actorId);
@@ -431,8 +432,10 @@ export function reduceGame(input, action) {
     case 'INITIATE_PVP': {
       if(!state.multiplayer||state.scenario==='cooperative-conquest')return fail(state,'PvP is disabled in Cooperative Conquest.');
       const defender=state.players.find(player=>player.id===action.targetId);if(!defender||defender.id===state.player.id)return fail(state,'Choose another player.');
-      if(distance(state.player,defender)!==1)return fail(state,'The defender must be adjacent.');
-      state.pvp={attackerId:state.player.id,defenderId:defender.id,phase:'ranged',attacker:{ranged:state.points.ranged,siege:state.points.siege,attack:state.points.attack+state.points.iceAttack+state.points.fireAttack,block:state.points.block},defender:{ranged:0,siege:0,attack:0,block:0},defenderReady:false};state.phase='pvp-ranged';log(state,`${state.player.name} challenged ${defender.name} to PvP combat.`);return state;
+      if(state.roundEndTurnsRemaining!==null||state.scenarioEndTurnsRemaining!==null)return fail(state,'PvP cannot begin after an end-of-round or end-game announcement.');if(defender.roundOrderFaceDown)return fail(state,'That player is protected until their skipped turn.');
+      const targetHex=state.map.find(hex=>hex.q===defender.q&&hex.r===defender.r);if(!targetHex||targetHex.revealed===false)return fail(state,'The defender’s space must be revealed.');if(['portal','city'].includes(targetHex.site))return fail(state,'PvP is not allowed on a portal or city space.');const range=distance(state.player,defender);if(range>1)return fail(state,'You must enter the defender’s space to initiate PvP.');
+      if(range===1){if(targetHex.enemy)return fail(state,'A hostile enemy prevents entry into that space.');const provoked=provokingEnemies(state,targetHex);if(provoked.length)return fail(state,'You cannot enter for PvP while provoking a rampaging enemy.');const cost=TERRAIN_COST[state.time][targetHex.terrain];if(!Number.isFinite(cost)||state.points.move<cost)return fail(state,`Entering the defender’s space requires ${Number.isFinite(cost)?cost:'legal'} Move.`);state.points.move-=cost;state.player.q=defender.q;state.player.r=defender.r;}
+      state.pvp={attackerId:state.player.id,defenderId:defender.id,phase:'attend',attendance:null,attacker:{ranged:state.points.ranged,siege:state.points.siege,attack:state.points.attack+state.points.iceAttack+state.points.fireAttack,block:state.points.block},defender:{ranged:0,siege:0,attack:0,block:0},defenderReady:false};state.phase='pvp-attend';log(state,`${state.player.name} entered ${defender.name}'s space and initiated PvP.`);return state;
     }
     case 'RESOLVE_PVP': return resolvePvp(state);
     case 'START_COMBAT': {
@@ -555,6 +558,11 @@ function contributeRemote(state,action){
     const card=actor.hand[index],effect=action.mode==='sideways'?{attack:1}:card.basic;const contribution=combatContribution(effect);assault.contributors[actor.id]=Object.fromEntries(Object.entries(assault.contributors[actor.id]||combatContribution({})).map(([key,value])=>[key,value+contribution[key]]));actor.played.push(actor.hand.splice(index,1)[0]);log(state,`${actor.name} contributed ${card.name} to the city assault.`);bindPlayerState(state,state.activePlayerId);return state;
   }
   const pvp=state.pvp;if(!pvp||pvp.defenderId!==actor.id)return fail(state,'You are not the defender in this PvP combat.');
+  if(action.type==='PVP_ATTEND'){
+    if(state.phase!=='pvp-attend'||pvp.attendance)return fail(state,'The defender has already chosen how to attend.');if(!['full','partial'].includes(action.mode))return fail(state,'Choose full or partial attendance.');if(action.mode==='full'&&!actor.hand.some(card=>card.id!=='wound'))return fail(state,'Full attendance requires at least one non-Wound card in hand.');
+    pvp.attendance=action.mode;if(action.mode==='full'){actor.skipNextTurn=true;actor.roundOrderFaceDown=true;const hex=state.map.find(item=>item.q===actor.q&&item.r===actor.r);pvp.defenderMana=hex?.site==='glade'?[state.time==='day'?'gold':'black']:[];}pvp.phase='ranged';state.phase='pvp-ranged';bindPlayerState(state,state.activePlayerId);log(state,`${actor.name} will ${action.mode==='full'?'fully attend and skip their next turn':'partially attend without skipping a turn'}.`);return state;
+  }
+  if(!pvp.attendance)return fail(state,'The defender must choose full or partial attendance first.');
   if(action.type==='PVP_RETREAT'){const attacker=state.players.find(player=>player.id===pvp.attackerId),hex=state.map.find(item=>item.q===action.q&&item.r===action.r);bindPlayerState(state,actor.id);if(!hex||hex.revealed===false||hex.enemy||distance(actor,hex)!==1||distance(attacker,hex)<=1||!Number.isFinite(TERRAIN_COST[state.time][hex.terrain])||isOccupiedByOpponent(state,hex))return fail(state,'Choose an empty adjacent revealed space farther from the attacker.');actor.q=hex.q;actor.r=hex.r;actor.fame=Math.max(0,actor.fame-1);state.pvp=null;state.phase='action';log(state,`${actor.name} retreated from PvP and lost 1 Fame.`);bindPlayerState(state,state.activePlayerId);return state;}
   if(action.ready){pvp.defenderReady=true;bindPlayerState(state,state.activePlayerId);return state;}
   bindPlayerState(state,actor.id);const index=actor.hand.findIndex(card=>card.uid===action.uid);if(index<0||actor.hand[index].id==='wound')return fail(state,'That defense card is unavailable.');
@@ -580,7 +588,11 @@ function resolvePvp(state){
     pvp.phase='melee';pvp.defender={ranged:0,siege:0,attack:0,block:0};pvp.defenderReady=false;state.phase='pvp-melee';bindPlayerState(state,attacker.id);log(state,'PvP ranged phase ends; melee begins.');return state;
   }
   const attackerDamage=Math.max(0,pvp.attacker.attack-pvp.defender.block),defenderDamage=Math.max(0,pvp.defender.attack-pvp.attacker.block);if(attackerDamage){bindPlayerState(state,defender.id);wound(state,Math.max(1,Math.ceil(attackerDamage/defender.armor)));}if(defenderDamage){bindPlayerState(state,attacker.id);wound(state,Math.max(1,Math.ceil(defenderDamage/attacker.armor)));}
-  const winner=attackerDamage===defenderDamage?null:attackerDamage>defenderDamage?attacker:defender;if(winner){bindPlayerState(state,winner.id);gainFame(state,2);winner.pvpWins=(winner.pvpWins||0)+1;}bindPlayerState(state,attacker.id);state.pvp=null;state.phase='action';log(state,winner?`${winner.name} won the PvP combat.`:'PvP combat ended in a draw.');return state;
+  const winner=attackerDamage===defenderDamage?null:attackerDamage>defenderDamage?attacker:defender;if(winner){bindPlayerState(state,winner.id);gainFame(state,2);winner.pvpWins=(winner.pvpWins||0)+1;}finishPvpReaction(state,pvp);bindPlayerState(state,attacker.id);state.pvp=null;state.phase='action';log(state,winner?`${winner.name} won the PvP combat.`:'PvP combat ended in a draw.');return state;
+}
+
+function finishPvpReaction(state,pvp){
+  if(pvp.attendance!=='full')return;const defender=state.players.find(player=>player.id===pvp.defenderId);bindPlayerState(state,defender.id);defender.discard.push(...defender.played);defender.played=[];defender.skills.forEach(skill=>{skill.used=false;});const target=handLimit(state);if(defender.hand.length<target)draw(state,target-defender.hand.length);pvp.defenderMana=[];
 }
 
 function finishRangedPhase(state){
@@ -685,7 +697,7 @@ function endTurn(state,roundAnnouncement=false) {
     if(state.scenarioEndTurnsRemaining!==null){state.scenarioEndTurnsRemaining--;if(state.scenarioEndTurnsRemaining<=0){state.status='won';state.scoring=calculateScore(state);log(state,'Final turns are complete. The conquest has ended.');return state;}}
     if(immediateExtraTurn){log(state,`${state.player.name} takes the extra turn granted by ${state.player.tactic?.name}.`);return state;}
     if(state.roundEndTurnsRemaining!==null&&!roundAnnouncement){state.roundEndTurnsRemaining--;if(state.roundEndTurnsRemaining<=0)return nextRound(state);}
-    const currentIndex=state.turnOrder.indexOf(state.activePlayerId);state.activePlayerId=state.turnOrder[(currentIndex+1)%state.turnOrder.length];bindPlayerState(state,state.activePlayerId);state.points=freshPoints();state.mana=[];state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;log(state,`${state.player.name}'s turn begins.`);return state;
+    const currentIndex=state.turnOrder.indexOf(state.activePlayerId);let nextIndex=(currentIndex+1)%state.turnOrder.length,nextPlayer=playerById(state,state.turnOrder[nextIndex]),guard=0;while(nextPlayer?.skipNextTurn&&guard<state.players.length){nextPlayer.skipNextTurn=false;nextPlayer.roundOrderFaceDown=false;log(state,`${nextPlayer.name} skips the turn already spent fully attending PvP.`);nextIndex=(nextIndex+1)%state.turnOrder.length;nextPlayer=playerById(state,state.turnOrder[nextIndex]);guard++;}state.activePlayerId=state.turnOrder[nextIndex];bindPlayerState(state,state.activePlayerId);state.points=freshPoints();state.mana=[];state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;log(state,`${state.player.name}'s turn begins.`);return state;
   }
   log(state,`Turn ${state.turn} begins.`); return state;
 }
