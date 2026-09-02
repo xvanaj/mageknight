@@ -170,7 +170,7 @@ export const UNITS = [
 ];
 
 const ADVANCED_CARDS = [
-  {id:'path-finding',name:'Path Finding',color:'green',type:'advanced',basic:{move:3},strong:{move:5}},
+  {id:'path-finding',name:'Path Finding',color:'green',type:'advanced',basic:{move:2,movementRule:{allTraversable:{reduction:1,minimum:2}}},strong:{move:4,movementRule:{allTraversable:{replace:2}}}},
   {id:'blood-rage',name:'Blood Rage',color:'red',type:'advanced',basic:{attack:3},strong:{attack:6}},
   {id:'diplomacy',name:'Diplomacy',color:'white',type:'advanced',basic:{influence:3},strong:{influence:6}},
   ...EXTENDED_ACTIONS,
@@ -266,7 +266,7 @@ const scenarioTileIds=(scenario,playerCount)=>{const setup=SCENARIO_TILE_COUNTS[
 const rollSource=(count,time,seed)=>{const faces=[...COLORS,'gold','black',...COLORS],colors=shuffled(faces,seed+(time==='night'?97:0)).slice(0,count),required=Math.ceil(count/2);let basics=colors.filter(color=>COLORS.includes(color)).length;for(let index=0;index<colors.length&&basics<required;index++)if(!COLORS.includes(colors[index])){colors[index]=COLORS[(seed+index*17)%COLORS.length];basics++;}return colors.map((color,index)=>({id:`die-${index}`,color,used:false}));};
 const log = (state, message) => { state.log.unshift({ turn: state.turn, round: state.round, message }); state.log = state.log.slice(0, 80); };
 const fail = (state, error) => ({ ...state, error });
-const freshBonuses=()=>({sideways:null,manaOverload:null,terrainReduction:null,terrainCostReduction:null,hexCostReduction:null,defeatFame:null,unitResistances:false,attackConversion:null,swiftBlock:0,extraSourceUses:0,blackAsBasic:false});
+const freshBonuses=()=>({sideways:null,manaOverload:null,terrainReduction:null,terrainCostReduction:null,hexCostReduction:null,movementRules:[],defeatFame:null,unitResistances:false,attackConversion:null,swiftBlock:0,extraSourceUses:0,blackAsBasic:false});
 const resetTurnBonuses=state=>{Object.assign(state.bonuses,freshBonuses());state.pendingCardBoost=null;};
 const checkpointTurn=state=>{const snapshot=clone({...state,undoCheckpoint:null});delete snapshot.undoCheckpoint;snapshot.undoBlockedReason=null;state.undoCheckpoint=snapshot;state.undoBlockedReason=null;};
 const lockUndo=(state,reason)=>{if(state.undoCheckpoint){state.undoCheckpoint=null;state.undoBlockedReason=reason;}};
@@ -418,7 +418,13 @@ export const legalSkillModes=(skill,phase)=>{
   return skill?.effect&&effectAllowedInPhase(skill.effect,phase)?[skill.effect]:[];
 };
 function currentHex(state) { return state.map.find(h => h.q === state.player.q && h.r === state.player.r); }
-const movementCost=(state,hex)=>{const base=hex?.site==='city'?2:TERRAIN_COST[state.time][hex?.terrain],reduction=(state.bonuses?.terrainReduction?.[hex?.terrain]||0)+(state.bonuses?.terrainCostReduction?.terrain===hex?.terrain?(state.bonuses.terrainCostReduction.reduction||0):0),hexReduction=state.bonuses?.hexCostReduction?.key===`${hex?.q}:${hex?.r}`?state.bonuses.hexCostReduction.reduction||0:0,minimum=Math.max(state.bonuses?.terrainCostReduction?.terrain===hex?.terrain?state.bonuses.terrainCostReduction.minimum||0:0,state.bonuses?.hexCostReduction?.key===`${hex?.q}:${hex?.r}`?state.bonuses.hexCostReduction.minimum||0:0);return Number.isFinite(base)?Math.max(minimum,base-reduction-hexReduction):base;};
+const movementCost=(state,hex)=>{
+  if(hex?.site==='city')return 2;
+  const terrain=hex?.terrain,rules=state.bonuses?.movementRules||[];let base=TERRAIN_COST[state.time][terrain],reduction=(state.bonuses?.terrainReduction?.[terrain]||0)+(state.bonuses?.terrainCostReduction?.terrain===terrain?(state.bonuses.terrainCostReduction.reduction||0):0),minimum=state.bonuses?.terrainCostReduction?.terrain===terrain?state.bonuses.terrainCostReduction.minimum||0:0;
+  for(const rule of rules){if(Object.prototype.hasOwnProperty.call(rule.replace||{},terrain))base=rule.replace[terrain];const all=rule.allTraversable;if(all&&Number.isFinite(base)){if(Number.isFinite(all.replace))base=all.replace;reduction+=all.reduction||0;minimum=Math.max(minimum,all.minimum||0);}}
+  const hexReduction=state.bonuses?.hexCostReduction?.key===`${hex?.q}:${hex?.r}`?state.bonuses.hexCostReduction.reduction||0:0;minimum=Math.max(minimum,state.bonuses?.hexCostReduction?.key===`${hex?.q}:${hex?.r}`?state.bonuses.hexCostReduction.minimum||0:0);
+  return Number.isFinite(base)?Math.max(minimum,base-reduction-hexReduction):base;
+};
 const isSafeSpace=(state,player,hex)=>{if(!hex||!Number.isFinite(TERRAIN_COST[state.time][hex.terrain]))return false;const identity=player.id||player.character,fortified=SITES[hex.site]?.kind==='fortified';if((fortified&&!hex.conquered)||(hex.site==='keep'&&hex.conquered&&hex.ownerId!==identity))return false;const sharedAllowed=hex.site==='portal'||(hex.site==='city'&&hex.conquered);return sharedAllowed||!(state.players||[]).some(other=>other.id!==player.id&&other.q===hex.q&&other.r===hex.r);};
 const cardWithUid = (card,state) => ({...clone(card),uid:`${card.id}-${state.turn}-${state.player.deck.length}-${state.player.discard.length}`});
 const resistanceCount = enemy => ['physical-resistant','fire-resistant','ice-resistant'].filter(t=>enemy.traits.includes(t)).length;
@@ -453,6 +459,9 @@ function addEffect(state, effect, sidewaysAs, choices={}) {
     else if(type==='famePerDefeat')state.bonuses.defeatFame={amount,phase:state.phase==='combat-attack'?'attack':'ranged'};
     else if(type==='reduceHexCost')state.bonuses.hexCostReduction={key:`${choices.q}:${choices.r}`,reduction:amount.reduction,minimum:amount.minimum};
     else if(type==='reduceTerrainCost')state.bonuses.terrainCostReduction={terrain:choices.terrain,reduction:amount.reduction,minimum:amount.minimum};
+    else if(type==='movementRule')state.bonuses.movementRules.push(clone(amount));
+    else if(type==='healOutsideCombat'){if(!state.phase.startsWith('combat-'))state.points.heal+=amount;}
+    else if(type==='endTurnPlacement'){}
     else if(['crystallize','gainCrystalChoice','poweredByAny','manaDraw','allowedMana','maxUnitLevel'].includes(type)){}
     else if(type.endsWith('Crystal')){const color=type.replace('Crystal','');if(state.player.crystals[color]<3)state.player.crystals[color]++;}
     else if (type === 'mana') {
@@ -645,7 +654,7 @@ export function reduceGame(input, action) {
       addEffect(state, effect, action.mode === 'sideways' ? action.as : null,action);
       if(pendingBoost){const stat=Object.keys(effect).find(type=>['move','influence','attack','block'].includes(type));if(stat)addEffect(state,{[stat]:pendingBoost.bonus});state.pendingCardBoost=null;}
       if(action.mode==='strong'&&state.bonuses.manaOverload?.color===card.color){const stat=['move','influence','attack','block'].find(k=>effect[k]);if(stat){addEffect(state,{[stat]:4});log(state,`Mana Overload adds ${stat} 4.`);}state.bonuses.manaOverload=null;}
-      const committedIndex=state.player.hand.findIndex(item=>item.uid===card.uid),committed=state.player.hand.splice(committedIndex,1)[0];if(effect.discardRequired){const discardIndex=state.player.hand.findIndex(item=>item.uid===action.discardUid);state.player.discard.push(state.player.hand.splice(discardIndex,1)[0]);}if(card.type==='artifact'&&action.mode==='strong')state.player.removed.push(committed);else state.player.played.push(committed);state.player.cardsPlayedThisTurn++;state.player.atTurnStart=false;log(state, `${card.name}: ${action.mode}${action.as||action.effectAs ? ` as ${action.as||action.effectAs}` : ''}.`); return state;
+      const committedIndex=state.player.hand.findIndex(item=>item.uid===card.uid),committed=state.player.hand.splice(committedIndex,1)[0];if(effect.endTurnPlacement)committed.endTurnPlacement=effect.endTurnPlacement;if(effect.discardRequired){const discardIndex=state.player.hand.findIndex(item=>item.uid===action.discardUid);state.player.discard.push(state.player.hand.splice(discardIndex,1)[0]);}if(card.type==='artifact'&&action.mode==='strong')state.player.removed.push(committed);else state.player.played.push(committed);state.player.cardsPlayedThisTurn++;state.player.atTurnStart=false;log(state, `${card.name}: ${action.mode}${action.as||action.effectAs ? ` as ${action.as||action.effectAs}` : ''}.`); return state;
     }
     case 'DISCARD_CARD': return fail(state,'Cards are selected for discard only while ending the turn.');
     case 'USE_UNIT': {
@@ -1075,7 +1084,7 @@ function applyForcedWithdrawal(state){
 function endTurn(state,roundAnnouncement=false,stage='start') {
   if(stage==='start'){
     const hex=applyForcedWithdrawal(state),immediateExtraTurn=Boolean(state.player.extraTurn),carry=state.player.carry;state.player.extraTurn=false;state.player.carry=null;
-    state.player.discard.push(...state.player.played);state.player.played=[];state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=false;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.moveHistory=[];state.player.turnAction=null;state.player.cityInfluenceApplied=false;state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value);state.mana=[];state.sourceTaken=false;resetTurnBonuses(state);state.player.skills.forEach(skill=>{skill.used=false;});
+    const played=state.player.played.splice(0);for(const card of played){const placement=card.endTurnPlacement;delete card.endTurnPlacement;if(placement==='deck-top')state.player.deck.unshift(card);else if(placement==='deck-bottom')state.player.deck.push(card);else state.player.discard.push(card);}state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=false;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.moveHistory=[];state.player.turnAction=null;state.player.cityInfluenceApplied=false;state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value);state.mana=[];state.sourceTaken=false;resetTurnBonuses(state);state.player.skills.forEach(skill=>{skill.used=false;});
     if(!roundAnnouncement&&hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
     if(!roundAnnouncement&&hex?.site==='glade'&&state.player.wounds>0){const before=state.player.hand.length+state.player.discard.length;removeWounds(state,1);if(state.player.hand.length+state.player.discard.length<before){state.player.wounds--;log(state,'The magical glade removed one Wound.');}}
     state.endTurnContext={playerId:state.player.id||null,roundAnnouncement,immediateExtraTurn};

@@ -5,6 +5,9 @@ import '../../App.css';
 const siteNames = Object.fromEntries(Object.entries(SITES).map(([id,site])=>[id,site.name]));
 const terrainGlyph = { plains:'·', forest:'♣', hills:'⌁', desert:'☀', wasteland:'◇', swamp:'≈', lake:'≋', mountain:'▲' };
 const effectText = effect => Object.entries(effect).map(([k,v]) => {
+  if (k === 'movementRule') { const replacements=Object.entries(v.replace||{}).map(([terrain,cost])=>`${terrain} costs ${cost}`);if(v.allTraversable?.replace)return `all traversable terrain costs ${v.allTraversable.replace}`;if(v.allTraversable?.reduction)return `traversable terrain cost -${v.allTraversable.reduction}, minimum ${v.allTraversable.minimum}`;return replacements.join(', '); }
+  if (k === 'healOutsideCombat') return `Heal +${v} outside combat`;
+  if (k === 'endTurnPlacement') return v==='deck-top'?'return to top of Deed deck at turn end':'return to bottom of Deed deck at turn end';
   if (k === 'options') return v.map(item=>item.label).join(' / ');
   if (k === 'mana') return v === 'crystal' ? 'gain a crystal' : 'gain mana';
   if (k === 'crystallize') return 'convert a mana token into its crystal';
