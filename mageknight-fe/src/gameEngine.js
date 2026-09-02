@@ -266,7 +266,7 @@ const scenarioTileIds=(scenario,playerCount)=>{const setup=SCENARIO_TILE_COUNTS[
 const rollSource=(count,time,seed)=>{const faces=[...COLORS,'gold','black',...COLORS],colors=shuffled(faces,seed+(time==='night'?97:0)).slice(0,count),required=Math.ceil(count/2);let basics=colors.filter(color=>COLORS.includes(color)).length;for(let index=0;index<colors.length&&basics<required;index++)if(!COLORS.includes(colors[index])){colors[index]=COLORS[(seed+index*17)%COLORS.length];basics++;}return colors.map((color,index)=>({id:`die-${index}`,color,used:false}));};
 const log = (state, message) => { state.log.unshift({ turn: state.turn, round: state.round, message }); state.log = state.log.slice(0, 80); };
 const fail = (state, error) => ({ ...state, error });
-const freshBonuses=()=>({sideways:null,manaOverload:null,terrainReduction:null,terrainCostReduction:null,hexCostReduction:null,movementRules:[],defeatFame:null,unitResistances:false,attackConversion:null,swiftBlock:0,extraSourceUses:0,blackAsBasic:false});
+const freshBonuses=()=>({sideways:null,manaOverload:null,terrainReduction:null,terrainCostReduction:null,hexCostReduction:null,movementRules:[],moveConversion:null,moveCardsInCombat:false,ignoreRampagers:false,handLimitBonus:0,defeatFame:null,unitResistances:false,attackConversion:null,swiftBlock:0,extraSourceUses:0,blackAsBasic:false});
 const resetTurnBonuses=state=>{Object.assign(state.bonuses,freshBonuses());state.pendingCardBoost=null;};
 const checkpointTurn=state=>{const snapshot=clone({...state,undoCheckpoint:null});delete snapshot.undoCheckpoint;snapshot.undoBlockedReason=null;state.undoCheckpoint=snapshot;state.undoBlockedReason=null;};
 const lockUndo=(state,reason)=>{if(state.undoCheckpoint){state.undoCheckpoint=null;state.undoBlockedReason=reason;}};
@@ -421,7 +421,7 @@ function currentHex(state) { return state.map.find(h => h.q === state.player.q &
 const movementCost=(state,hex)=>{
   if(hex?.site==='city')return 2;
   const terrain=hex?.terrain,rules=state.bonuses?.movementRules||[];let base=TERRAIN_COST[state.time][terrain],reduction=(state.bonuses?.terrainReduction?.[terrain]||0)+(state.bonuses?.terrainCostReduction?.terrain===terrain?(state.bonuses.terrainCostReduction.reduction||0):0),minimum=state.bonuses?.terrainCostReduction?.terrain===terrain?state.bonuses.terrainCostReduction.minimum||0:0;
-  for(const rule of rules){if(Object.prototype.hasOwnProperty.call(rule.replace||{},terrain))base=rule.replace[terrain];const all=rule.allTraversable;if(all&&Number.isFinite(base)){if(Number.isFinite(all.replace))base=all.replace;reduction+=all.reduction||0;minimum=Math.max(minimum,all.minimum||0);}}
+  for(const rule of rules){if(Object.prototype.hasOwnProperty.call(rule.replace||{},terrain))base=rule.replace[terrain];reduction+=rule.reduction?.[terrain]||0;const all=rule.all;if(all){if(Number.isFinite(all.replace))base=all.replace;reduction+=all.reduction||0;minimum=Math.max(minimum,all.minimum||0);}const traversable=rule.allTraversable;if(traversable&&Number.isFinite(base)){if(Number.isFinite(traversable.replace))base=traversable.replace;reduction+=traversable.reduction||0;minimum=Math.max(minimum,traversable.minimum||0);}}
   const hexReduction=state.bonuses?.hexCostReduction?.key===`${hex?.q}:${hex?.r}`?state.bonuses.hexCostReduction.reduction||0:0;minimum=Math.max(minimum,state.bonuses?.hexCostReduction?.key===`${hex?.q}:${hex?.r}`?state.bonuses.hexCostReduction.minimum||0:0);
   return Number.isFinite(base)?Math.max(minimum,base-reduction-hexReduction):base;
 };
@@ -462,6 +462,11 @@ function addEffect(state, effect, sidewaysAs, choices={}) {
     else if(type==='movementRule')state.bonuses.movementRules.push(clone(amount));
     else if(type==='healOutsideCombat'){if(!state.phase.startsWith('combat-'))state.points.heal+=amount;}
     else if(type==='endTurnPlacement'){}
+    else if(type==='moveConversion')state.bonuses.moveConversion={...(state.bonuses.moveConversion||{}),...amount};
+    else if(type==='moveCardsInCombat')state.bonuses.moveCardsInCombat=Boolean(amount);
+    else if(type==='ignoreRampagers')state.bonuses.ignoreRampagers=Boolean(amount);
+    else if(type==='handLimitBonus')state.bonuses.handLimitBonus=(state.bonuses.handLimitBonus||0)+amount;
+    else if(type==='additionalMana'){}
     else if(['crystallize','gainCrystalChoice','poweredByAny','manaDraw','allowedMana','maxUnitLevel'].includes(type)){}
     else if(type.endsWith('Crystal')){const color=type.replace('Crystal','');if(state.player.crystals[color]<3)state.player.crystals[color]++;}
     else if (type === 'mana') {
@@ -531,7 +536,7 @@ export function legalMoves(state) {
     .map(h => ({ ...h, cost: movementCost(state,h), legal: state.points.move >= movementCost(state,h) }));
 }
 const isOccupiedByOpponent=(state,hex)=>Boolean(state.multiplayer&&hex.site!=='portal'&&state.players.some(player=>player.id!==state.player.id&&player.q===hex.q&&player.r===hex.r));
-const provokingEnemies=(state,destination)=>state.map.filter(hex=>hex.revealed!==false&&hex.enemy&&['rampaging','draconum'].includes(hex.site)&&distance(state.player,hex)===1&&distance(destination,hex)===1);
+const provokingEnemies=(state,destination)=>state.bonuses?.ignoreRampagers?[]:state.map.filter(hex=>hex.revealed!==false&&hex.enemy&&['rampaging','draconum'].includes(hex.site)&&distance(state.player,hex)===1&&distance(destination,hex)===1);
 
 export function legalExplorations(state){
   if(!state.explorationEnabled||state.phase!=='action'||state.player.turnAction)return [];
@@ -629,7 +634,7 @@ export function reduceGame(input, action) {
         const legalSideways=['move','influence','attack','block'].filter(type=>effectAllowedInPhase(type,state.phase));
         if(!legalSideways.includes(action.as))return fail(state,`Choose a sideways effect available in the ${state.phase.replace('combat-','')} phase.`);
       }else{
-        const legalEffects=legalCardEffectTypes(effect,state.phase);
+        const legalEffects=legalCardEffectTypes(effect,state.phase),conversion=effect.moveConversion||state.bonuses.moveConversion;if(!legalEffects.length&&effect.move&&(effect.moveCardsInCombat||state.bonuses.moveCardsInCombat)&&((state.phase==='combat-ranged'&&conversion?.ranged)||(state.phase==='combat-attack'&&conversion?.attack)))legalEffects.push('move');
         if(effect.any&&!legalEffects.includes(action.effectAs))return fail(state,legalEffects.length?`Choose ${legalEffects.join(' or ')} for this flexible effect.`:'This flexible action is not available in this phase.');
         if(effect.anyCombat&&!legalEffects.includes(action.effectAs))return fail(state,legalEffects.length?`Choose ${legalEffects.join(' or ')} for this flexible combat effect.`:'This combat action is not available in this phase.');
         if(!effect.any&&!effect.anyCombat&&!legalEffects.length)return fail(state,`That card action cannot be committed in the ${state.phase.replace('combat-','')} phase.`);
@@ -646,7 +651,7 @@ export function reduceGame(input, action) {
       if(effect.cardBoost&&!state.player.hand.some(item=>item.uid!==card.uid&&item.id!=='wound'&&!['spell','artifact'].includes(item.type)))return fail(state,'Concentration needs another Action card in hand.');
       if(card.type==='spell'){
         if(action.mode==='sideways'){}else if(action.mode==='basic'){if(!canSpendMana(state,card.color))return fail(state,`Casting this Spell requires ${card.color} mana.`);spendMana(state,card.color);}else if(action.mode==='strong'){if(effectiveTime(state)!=='night')return fail(state,'The strong Spell effect can only be cast at Night.');if(!canSpendMana(state,card.color)||!state.mana.includes('black'))return fail(state,`The strong Spell requires ${card.color} and black mana.`);spendMana(state,card.color);state.mana.splice(state.mana.indexOf('black'),1);}else return fail(state,'Choose a Spell effect.');
-      } else if(card.type!=='artifact'&&action.mode==='strong'&&!pendingBoost&&!spendMana(state,effect.poweredByAny?action.powerColor:card.color))return fail(state,`The strong action requires ${effect.poweredByAny?'a chosen basic':card.color} mana.`);
+      } else if(card.type!=='artifact'&&action.mode==='strong'){const manaCost=[];if(!pendingBoost)manaCost.push({color:effect.poweredByAny?action.powerColor:card.color,count:1});if(effect.additionalMana)manaCost.push({color:effect.additionalMana,count:1});if(manaCost.length&&!payManaCost(state,manaCost))return fail(state,`The strong action requires ${manaCost.map(item=>item.color).join(' + ')} mana.`);}
       if(action.mode==='sideways'&&state.bonuses.sideways?.advancedValue&&['advanced','spell','artifact'].includes(card.type))state.bonuses.sideways.value=state.bonuses.sideways.advancedValue;
       if(effect.crystallize){state.mana.splice(state.mana.indexOf(action.manaColor),1);gainCrystal(state,action.manaColor);}
       if(effect.gainCrystalChoice)gainCrystal(state,action.crystalColor);
@@ -670,6 +675,9 @@ export function reduceGame(input, action) {
     }
     case 'USE_BANNER': {
       if(!['action','combat-ranged','combat-block','combat-attack'].includes(state.phase))return fail(state,'That Banner cannot be used in this phase.');if(unitsForbiddenInCombat(state))return fail(state,'Units and their Banners cannot be used in a Dungeon, Tomb, or monastery-burning combat.');const unit=findUnit(state.player.units,action.unitId);if(!unit?.banner||unit.banner.used||unit.wounded)return fail(state,'That Unit’s Banner is unavailable.');addEffect(state,unit.banner.basic||{},null,action);unit.banner.used=true;state.player.atTurnStart=false;log(state,`${unit.name} used ${unit.banner.name}.`);return state;
+    }
+    case 'CONVERT_MOVE': {
+      const target=action.target,cost=state.bonuses.moveConversion?.[target],amount=Number(action.amount);if(!Number.isInteger(amount)||amount<=0)return fail(state,'Choose a positive amount of attack power.');if(!cost||!((target==='ranged'&&state.phase==='combat-ranged')||(target==='attack'&&state.phase==='combat-attack')))return fail(state,'Move cannot be converted to that attack type now.');if(state.points.move<amount*cost)return fail(state,`You need ${amount*cost} Move for that conversion.`);state.points.move-=amount*cost;state.points[target]+=amount;log(state,`Converted ${amount*cost} Move to ${amount} ${target==='ranged'?'Ranged Attack':'Attack'}.`);return state;
     }
     case 'MOVE': {
       if (state.phase !== 'action') return fail(state, 'Finish combat before moving.');if(state.player.turnAction)return fail(state,'Movement must happen before your turn action.');
@@ -1083,16 +1091,16 @@ function applyForcedWithdrawal(state){
 
 function endTurn(state,roundAnnouncement=false,stage='start') {
   if(stage==='start'){
-    const hex=applyForcedWithdrawal(state),immediateExtraTurn=Boolean(state.player.extraTurn),carry=state.player.carry;state.player.extraTurn=false;state.player.carry=null;
+    const hex=applyForcedWithdrawal(state),immediateExtraTurn=Boolean(state.player.extraTurn),carry=state.player.carry,handLimitBonus=state.bonuses.handLimitBonus||0;state.player.extraTurn=false;state.player.carry=null;
     const played=state.player.played.splice(0);for(const card of played){const placement=card.endTurnPlacement;delete card.endTurnPlacement;if(placement==='deck-top')state.player.deck.unshift(card);else if(placement==='deck-bottom')state.player.deck.push(card);else state.player.discard.push(card);}state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=false;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.moveHistory=[];state.player.turnAction=null;state.player.cityInfluenceApplied=false;state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value);state.mana=[];state.sourceTaken=false;resetTurnBonuses(state);state.player.skills.forEach(skill=>{skill.used=false;});
     if(!roundAnnouncement&&hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
     if(!roundAnnouncement&&hex?.site==='glade'&&state.player.wounds>0){const before=state.player.hand.length+state.player.discard.length;removeWounds(state,1);if(state.player.hand.length+state.player.discard.length<before){state.player.wounds--;log(state,'The magical glade removed one Wound.');}}
-    state.endTurnContext={playerId:state.player.id||null,roundAnnouncement,immediateExtraTurn};
+    state.endTurnContext={playerId:state.player.id||null,roundAnnouncement,immediateExtraTurn,handLimitBonus};
     if(state.pendingRewards.length){state.phase='end-rewards';log(state,`${state.player.name} must claim combat rewards before leveling and drawing cards.`);return state;}
   }
   const context=state.endTurnContext||{playerId:state.player.id||null,roundAnnouncement,immediateExtraTurn:false};roundAnnouncement=context.roundAnnouncement;
   if(stage!=='after-level'&&beginLevelUp(state,{type:'end-turn',playerId:context.playerId,roundAnnouncement}))return state;
-  state.levelUpContext=null;state.phase='action';const immediateExtraTurn=Boolean(context.immediateExtraTurn),hex=currentHex(state),target=handLimit(state);state.endTurnContext=null;if(!roundAnnouncement&&state.player.hand.length<target)draw(state,target-state.player.hand.length);
+  state.levelUpContext=null;state.phase='action';const immediateExtraTurn=Boolean(context.immediateExtraTurn),hex=currentHex(state),target=handLimit(state)+(context.handLimitBonus||0);state.endTurnContext=null;if(!roundAnnouncement&&state.player.hand.length<target)draw(state,target-state.player.hand.length);
   if(!roundAnnouncement&&hex?.site==='glade')state.mana.push(state.time==='day'?'gold':'black');
   state.turn++;
   if(state.multiplayer){
