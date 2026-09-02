@@ -301,7 +301,7 @@ function addEffect(state, effect, sidewaysAs, choices={}) {
   }
   else Object.entries(effect).forEach(([type, amount]) => {
     if (type in state.points) state.points[type] += amount;
-    else if (type === 'reputation') state.player.reputation += amount;
+    else if (type === 'reputation') state.player.reputation=Math.max(-7,Math.min(5,state.player.reputation+amount));
     else if (type === 'fame') gainFame(state, amount);
     else if (type === 'draw') draw(state, amount);
     else if(type==='any'||type==='anyCombat')state.points[choices.effectAs]+=amount;
@@ -652,11 +652,20 @@ function finishPvpAttack(state){const pvp=state.pvp,previous=pvp.currentAttacker
 
 function finishPvpCombat(state,retreatingId,winnerId=null){
   const pvp=state.pvp,retreating=playerById(state,retreatingId),winner=winnerId&&playerById(state,winnerId);if(winner){const levelGap=Math.max(0,retreating.level-winner.level),fame=levelGap?1+levelGap*2:(retreating.fame>winner.fame?1:0);bindPlayerState(state,winner.id);if(fame)gainFame(state,fame);winner.pvpWins=(winner.pvpWins||0)+1;}
-  finishPvpReaction(state,pvp);bindPlayerState(state,pvp.attackerId);state.pvp=null;state.phase='action';log(state,winner?`${winner.name} forced ${retreating.name} to withdraw from PvP.`:`${retreating.name} withdrew after both players passed.`);return state;
+  const outcome=winner?`${winner.name} forced ${retreating.name} to withdraw from PvP.`:`${retreating.name} withdrew after both players passed.`;log(state,outcome);if(pvp.attendance==='full'){pvp.stage='after';pvp.currentAttackerId=null;pvp.defenderHeal=0;pvp.outcome=outcome;state.phase='pvp-after';bindPlayerState(state,state.activePlayerId);log(state,`${playerById(state,pvp.defenderId).name} may now use healing cards before ending the attended turn.`);return state;}finishPvpReaction(state,pvp);bindPlayerState(state,pvp.attackerId);state.pvp=null;state.phase='action';return state;
 }
 
 function resolvePvpAction(state,action,actor){
   const pvp=state.pvp,opponentId=pvpOpponentId(pvp,actor.id),role=actor.id===pvp.currentAttackerId?'attack':'block';
+  if(action.type==='PVP_PLAY_AFTER'){
+    if(state.phase!=='pvp-after'||pvp.stage!=='after'||actor.id!==pvp.defenderId||pvp.attendance!=='full')return fail(state,'Only the fully attending defender may play healing cards now.');const index=actor.hand.findIndex(card=>card.uid===action.uid&&card.id!=='wound');if(index<0)return fail(state,'That healing card is unavailable.');const card=actor.hand[index];if(!['basic','strong'].includes(action.mode))return fail(state,'Choose the basic or strong healing effect.');const effect=card[action.mode]||{};if(!Number(effect.heal||0))return fail(state,'Only a healing effect may be played after this combat.');if(card.type==='spell'){if(action.mode==='basic'){if(!canSpendPvpMana(state,actor,card.color))return fail(state,`Casting this Spell requires ${card.color} mana.`);spendPvpMana(state,actor,card.color);}else{const pool=pvpManaPool(state,actor);if(state.time!=='night')return fail(state,'The strong Spell effect can only be cast at Night.');if(!canSpendPvpMana(state,actor,card.color)||!pool.includes('black'))return fail(state,`The strong Spell requires ${card.color} and black mana.`);spendPvpMana(state,actor,card.color);pool.splice(pool.indexOf('black'),1);}}else if(card.type!=='artifact'&&action.mode==='strong'&&!spendPvpMana(state,actor,card.color))return fail(state,`The strong action requires ${card.color} mana.`);pvp.defenderHeal+=Number(effect.heal);const committed=actor.hand.splice(index,1)[0];if(card.type==='artifact'&&action.mode==='strong')actor.removed.push(committed);else actor.played.push(committed);actor.cardsPlayedThisTurn++;log(state,`${actor.name} generated ${effect.heal} Heal after PvP.`);return state;
+  }
+  if(action.type==='PVP_SPEND_HEAL'){
+    if(state.phase!=='pvp-after'||actor.id!==pvp.defenderId)return fail(state,'Healing is no longer available.');if(action.unitId){const unit=actor.units.find(item=>item.id===action.unitId&&item.wounded),cost=unit?.level||1;if(!unit)return fail(state,'That Unit is not wounded.');if(pvp.defenderHeal<cost)return fail(state,`Healing that Unit requires ${cost} Heal.`);pvp.defenderHeal-=cost;unit.woundCount=Math.max(0,(unit.woundCount||1)-1);unit.wounded=unit.woundCount>0;return state;}if(actor.wounds<1)return fail(state,'You have no Wound to heal.');if(pvp.defenderHeal<1)return fail(state,'You need 1 Heal.');pvp.defenderHeal--;actor.wounds--;const pile=[actor.hand,actor.discard].find(cards=>cards.some(card=>card.id==='wound'));if(pile)pile.splice(pile.findIndex(card=>card.id==='wound'),1);return state;
+  }
+  if(action.type==='PVP_END_REACTION'){
+    if(state.phase!=='pvp-after'||actor.id!==pvp.defenderId)return fail(state,'Only the fully attending defender may end this reaction.');finishPvpReaction(state,pvp);const aggressorId=pvp.attackerId;state.pvp=null;state.phase='action';bindPlayerState(state,aggressorId);log(state,`${actor.name} completed the fully attended PvP turn.`);return state;
+  }
   if(action.type==='PVP_TAKE_SOURCE'){
     if(actor.id!==pvp.defenderId||pvp.attendance!=='full')return fail(state,'Only a fully attending defender may use the Source.');if(pvp.defenderSourceTaken)return fail(state,'The defender has already used a Source die.');const die=state.source.find(item=>item.id===action.id);if(!die)return fail(state,'Unknown Source die.');if(die.color==='black'&&state.time==='day')return fail(state,'Black mana cannot be used during the Day.');if(die.color==='gold'&&state.time==='night')return fail(state,'Gold mana cannot be used during the Night.');lockUndo(state,'A Source die was rerolled during PvP.');pvp.defenderMana=pvp.defenderMana||[];pvp.defenderMana.push(die.color);pvp.defenderSourceTaken=true;const faces=[...COLORS,'gold','black'];die.color=faces[(state.seed+state.turn*11+Number(die.id.slice(-1)))%faces.length];log(state,`${actor.name} used a Source die while fully attending PvP.`);return state;
   }
