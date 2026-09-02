@@ -95,6 +95,9 @@ export const EXTENDED_UNITS = [
 ];
 
 export const EXTENDED_ACTIONS = [
+  {id:'fire-bolt',name:'Fire Bolt',color:'red',type:'advanced',basic:{gainCrystalColor:'red'},strong:{fireRanged:3}},
+  {id:'blood-ritual',name:'Blood Ritual',color:'red',type:'advanced',basic:{bloodRitual:{tokens:1,redCrystal:true}},strong:{bloodRitual:{tokens:3,mayCrystallize:true}}},
+  {id:'magic-talent',name:'Magic Talent',color:'blue',type:'advanced',basic:{magicTalent:'cast'},strong:{magicTalent:'gain'}},
   {id:'crushing-bolt',name:'Crushing Bolt',color:'green',type:'advanced',basic:{gainCrystalColor:'green'},strong:{siege:3}},
   {id:'ice-shield',name:'Ice Shield',color:'blue',type:'advanced',basic:{iceBlock:3},strong:{iceBlock:3,armorChange:{amount:-3,minimum:1,exclude:'ice-resistant'}}},
   {id:'ambush',name:'Ambush',color:'green',type:'advanced',basic:{move:2,attackBlockCardBonus:{attack:1,block:2}},strong:{move:4,attackBlockCardBonus:{attack:2,block:4}}},
