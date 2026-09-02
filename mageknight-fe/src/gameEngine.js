@@ -171,7 +171,7 @@ const shuffled = (items, seed) => {
   for (let i = result.length - 1; i > 0; i--) { x = (1664525*x + 1013904223) >>> 0; const j = x % (i+1); [result[i], result[j]] = [result[j], result[i]]; }
   return result;
 };
-const rollSource=(count,time,seed)=>{const faces=[...COLORS,time==='day'?'gold':'black',...COLORS],colors=shuffled(faces,seed).slice(0,count),required=Math.ceil(count/2);let basics=colors.filter(color=>COLORS.includes(color)).length;for(let index=0;index<colors.length&&basics<required;index++)if(!COLORS.includes(colors[index])){colors[index]=COLORS[(seed+index*17)%COLORS.length];basics++;}return colors.map((color,index)=>({id:`die-${index}`,color,used:false}));};
+const rollSource=(count,time,seed)=>{const faces=[...COLORS,'gold','black',...COLORS],colors=shuffled(faces,seed+(time==='night'?97:0)).slice(0,count),required=Math.ceil(count/2);let basics=colors.filter(color=>COLORS.includes(color)).length;for(let index=0;index<colors.length&&basics<required;index++)if(!COLORS.includes(colors[index])){colors[index]=COLORS[(seed+index*17)%COLORS.length];basics++;}return colors.map((color,index)=>({id:`die-${index}`,color,used:false}));};
 const log = (state, message) => { state.log.unshift({ turn: state.turn, round: state.round, message }); state.log = state.log.slice(0, 80); };
 const fail = (state, error) => ({ ...state, error });
 const checkpointTurn=state=>{const snapshot=clone({...state,undoCheckpoint:null});delete snapshot.undoCheckpoint;snapshot.undoBlockedReason=null;state.undoCheckpoint=snapshot;state.undoBlockedReason=null;};
@@ -400,7 +400,7 @@ export function reduceGame(input, action) {
       if (die.color === 'black' && state.time === 'day') return fail(state, 'Black mana cannot be used during the Day.');
       if (die.color === 'gold' && state.time === 'night') return fail(state, 'Gold mana cannot be used during the Night.');
       lockUndo(state,'A Source die was rerolled.');state.mana.push(die.color); state.sourceTaken = true;state.player.atTurnStart=false;
-      const faces = [...COLORS, state.time === 'day' ? 'gold' : 'black']; die.color = faces[(state.seed + state.turn * 7 + Number(die.id.slice(-1))) % faces.length];
+      const faces = [...COLORS,'gold','black']; die.color = faces[(state.seed + state.turn * 7 + Number(die.id.slice(-1))) % faces.length];
       log(state, `Took ${state.mana[state.mana.length-1]} mana from the Source.`); return state;
     }
     case 'PLAY_CARD': {
