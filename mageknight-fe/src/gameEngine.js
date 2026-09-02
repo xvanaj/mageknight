@@ -171,6 +171,7 @@ const shuffled = (items, seed) => {
   for (let i = result.length - 1; i > 0; i--) { x = (1664525*x + 1013904223) >>> 0; const j = x % (i+1); [result[i], result[j]] = [result[j], result[i]]; }
   return result;
 };
+const rollSource=(count,time,seed)=>{const faces=[...COLORS,time==='day'?'gold':'black',...COLORS],colors=shuffled(faces,seed).slice(0,count),required=Math.ceil(count/2);let basics=colors.filter(color=>COLORS.includes(color)).length;for(let index=0;index<colors.length&&basics<required;index++)if(!COLORS.includes(colors[index])){colors[index]=COLORS[(seed+index*17)%COLORS.length];basics++;}return colors.map((color,index)=>({id:`die-${index}`,color,used:false}));};
 const log = (state, message) => { state.log.unshift({ turn: state.turn, round: state.round, message }); state.log = state.log.slice(0, 80); };
 const fail = (state, error) => ({ ...state, error });
 const checkpointTurn=state=>{const snapshot=clone({...state,undoCheckpoint:null});delete snapshot.undoCheckpoint;snapshot.undoBlockedReason=null;state.undoCheckpoint=snapshot;state.undoBlockedReason=null;};
@@ -208,7 +209,7 @@ const makePlayer=(seed,character='tovak',name)=>{
 };
 
 export function createGame(seed = 20260901, options = {}) {
-  const source = shuffled([...COLORS, 'gold', 'black', ...COLORS], seed + 9).slice(0, 3).map((color, i) => ({ id: `die-${i}`, color, used: false }));
+  const source = rollSource(3,'day',seed+9);
   const character=options.character||'tovak';const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
   const advancedPool=shuffled(clone(ADVANCED_CARDS),seed+41),spellPool=shuffled(clone(SPELL_CARDS.filter(card=>!options.removeCompetitive||!card.competitive)),seed+51),regularUnits=shuffled(clone(UNITS.filter(unit=>!unit.elite)),seed+61),eliteUnits=shuffled(clone(UNITS.filter(unit=>unit.elite)),seed+62);
   const state = {
@@ -238,7 +239,7 @@ export function createMultiplayerGame(lobby, seed = 20260901) {
   state.version=5;state.multiplayer=true;state.scenario=lobby.scenario;state.maxRounds=lobby.scenario==='blitz-conquest'?4:6;state.phase='tactic';state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=lobby.players.map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];
   state.players=lobby.players.map((member,index)=>({...individualGames[index].player,id:member.id,playerName:member.name,character:member.character,name:characterNames[member.character]||member.name,connected:true,tactic:null}));
   if(lobby.scenario==='blitz-conquest')state.players.forEach(player=>{player.fame=1;player.reputation=2;});
-  const extra=lobby.scenario==='blitz-conquest'?1:0;state.source=shuffled([...COLORS,'gold','black',...COLORS],seed+9).slice(0,lobby.players.length+2+extra).map((color,index)=>({id:`die-${index}`,color,used:false}));
+  const extra=lobby.scenario==='blitz-conquest'?1:0;state.source=rollSource(lobby.players.length+2+extra,'day',seed+9);
   const playerCount=lobby.players.length,cityLevels=lobby.scenario==='cooperative-conquest'?(playerCount===1?[5,8]:playerCount===2?[5,5,8]:[5,5,5,11]):lobby.scenario==='blitz-conquest'?Array.from({length:Math.max(2,playerCount)},()=>3):playerCount===1?[5,8]:Array.from({length:playerCount},()=>4),allCities=shuffled(state.map.filter(hex=>hex.site==='city'),seed+211),activeCities=allCities.slice(0,cityLevels.length),activeSet=new Set(activeCities.map(hex=>`${hex.q}:${hex.r}`));allCities.filter(hex=>!activeSet.has(`${hex.q}:${hex.r}`)).forEach(hex=>{hex.site=null;hex.cityColor=null;hex.enemy=null;hex.enemies=[];hex.enemyFaceDown=false;});
   const garrisonPool=[ENEMIES.city,ENEMIES.guards,ENEMIES.mage,ENEMIES.gargoyles,ENEMIES.dragon];activeCities.forEach((hex,index)=>{hex.level=cityLevels[index];hex.finalCity=index===cityLevels.length-1&&new Set(cityLevels).size>1;const count=Math.ceil(hex.level/3)+1;hex.enemies=Array.from({length:count},(_,slot)=>({...clone(garrisonPool[(index+slot)%garrisonPool.length]),uid:`city-${index}-${slot}`}));hex.enemy=enemyGroup(hex.enemies);hex.enemyFaceDown=true;});const spawning=state.map.find(hex=>hex.site==='spawning-grounds');if(spawning){spawning.enemies=[{...clone(ENEMIES.den),uid:'spawn-den'},{...clone(ENEMIES.golem),uid:'spawn-golem'}];spawning.enemy=enemyGroup(spawning.enemies);}
   while(state.offer.units.length<lobby.players.length+2+extra&&state.decks.regularUnits.length)state.offer.units.push(state.decks.regularUnits.shift());
@@ -396,6 +397,7 @@ export function reduceGame(input, action) {
       if (state.sourceTaken) return fail(state, 'Only one Source die may be used per turn.');
       const die = state.source.find(d => d.id === action.id); if (!die) return fail(state, 'Unknown Source die.');
       if (die.color === 'black' && state.time === 'day') return fail(state, 'Black mana cannot be used during the Day.');
+      if (die.color === 'gold' && state.time === 'night') return fail(state, 'Gold mana cannot be used during the Night.');
       lockUndo(state,'A Source die was rerolled.');state.mana.push(die.color); state.sourceTaken = true;state.player.atTurnStart=false;
       const faces = [...COLORS, state.time === 'day' ? 'gold' : 'black']; die.color = faces[(state.seed + state.turn * 7 + Number(die.id.slice(-1))) % faces.length];
       log(state, `Took ${state.mana[state.mana.length-1]} mana from the Source.`); return state;
@@ -824,7 +826,7 @@ function advanceRound(state) {
     if(state.dummy){state.dummy.deck=shuffled([...state.dummy.deck,...state.dummy.discard],state.seed+state.round*701);state.dummy.discard=[];state.dummy.tactic=null;}
     state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=[...state.players].sort((a,b)=>a.fame-b.fame||state.players.indexOf(a)-state.players.indexOf(b)).map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];if(state.dummy&&state.players.length>1)selectDummyTactic(state);bindPlayerState(state,state.players[0].id);
   } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];state.player.tactic=null;state.player.tacticUsed=false;state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=!state.tacticsEnabled;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.moveHistory=[];state.player.turnAction=null;draw(state,handLimit(state));state.player.units.forEach(unit=>{unit.spent=false;if(unit.banner)unit.banner.used=false;});state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
-  state.map.forEach(h=>h.used=false);const sourceCount=(state.multiplayer?state.players.length:1)+2+(state.scenario==='blitz-conquest'?1:0);state.source=shuffled([...COLORS,state.time==='day'?'gold':'black',...COLORS],state.seed+state.round).slice(0,sourceCount).map((color,i)=>({id:`die-${i}`,color})); state.points=freshPoints();state.turn++;state.mana=[];state.sourceTaken=false;state.tactic=null;if(state.tacticsEnabled)state.phase='tactic';
+  state.map.forEach(h=>h.used=false);const sourceCount=(state.multiplayer?state.players.length:1)+2+(state.scenario==='blitz-conquest'?1:0);state.source=rollSource(sourceCount,state.time,state.seed+state.round); state.points=freshPoints();state.turn++;state.mana=[];state.sourceTaken=false;state.tactic=null;if(state.tacticsEnabled)state.phase='tactic';
   log(state,`${state.time==='day'?'Day':'Night'} ${Math.ceil(state.round/2)} begins.`);if(!state.tacticsEnabled)checkpointTurn(state); return state;
 }
 
