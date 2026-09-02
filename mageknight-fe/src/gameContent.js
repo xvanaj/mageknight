@@ -3,41 +3,66 @@
  * changes. */
 
 const skill = (id, name, effect, value, cadence = 'turn') => ({ id, name, effect, value, cadence, description: `${name}: ${effect} ${value}.` });
+const option = (id, label, effect) => ({ id, label, effect });
+const choose = (...options) => ({ options });
 
 export const CHARACTER_PROFILES = {
   tovak: {
     name: 'Tovak', armor: 2,
-    replacements: [],
+    replacements: [
+      ['determination','cold-toughness','Cold Toughness','blue',choose(option('attack','Attack 2',{attack:2}),option('block','Block 2',{block:2})),{block:5,iceBlock:3}],
+      ['improvisation','instinct','Instinct','red',choose(option('move','Move 2',{move:2}),option('influence','Influence 2',{influence:2}),option('attack','Attack 2',{attack:2}),option('block','Block 2',{block:2})),choose(option('move','Move 4',{move:4}),option('influence','Influence 4',{influence:4}),option('attack','Attack 4',{attack:4}),option('block','Block 4',{block:4}))],
+    ],
     skills: [skill('tovak-attack','Cold Swordsmanship','iceAttack',2),skill('tovak-block','Shield Mastery','block',3),skill('tovak-move','Double Time','move',2),skill('tovak-range','Night Sharpshooting','ranged',2),skill('tovak-heal','I Feel No Pain','heal',1),skill('tovak-influence','Who Needs Magic?','influence',3),skill('tovak-resist','Resistance Break','armorBreak',1),skill('tovak-motivation','Motivation','draw',2,'round'),skill('tovak-mana','Mana Overload','mana',1,'round'),skill('tovak-versatile','Battle Mastery','anyCombat',2)],
   },
   arythea: {
     name: 'Arythea', armor: 2,
-    replacements: [['rage','blood-ritual','Blood Ritual','red',{attack:3},{attack:6,woundCost:1}],['tranquility','dark-paths','Dark Paths','green',{move:2},{move:5,reputation:-1}]],
+    replacements: [
+      ['rage','battle-versatility','Battle Versatility','red',choose(option('attack','Attack 2',{attack:2}),option('block','Block 2',{block:2}),option('ranged','Ranged Attack 1',{ranged:1})),choose(option('attack','Attack 4',{attack:4}),option('block','Block 4',{block:4}),option('fire-attack','Fire Attack 3',{fireAttack:3}),option('fire-block','Fire Block 3',{fireBlock:3}),option('ranged','Ranged Attack 3',{ranged:3}),option('siege','Siege Attack 2',{siege:2}))],
+      ['mana-draw','mana-pull','Mana Pull','white',{extraSource:1,blackAsBasic:true},{manaDraw:{dice:2,tokensPerDie:1}}],
+    ],
     skills: [skill('arythea-blood','Blood Rage','attack',3),skill('arythea-fire','Fire Mastery','fireAttack',2),skill('arythea-dark','Dark Paths','move',3),skill('arythea-pain','Power of Pain','anyCombat',2),skill('arythea-charm','Dark Negotiation','influence',3),skill('arythea-heal','Regeneration','heal',1),skill('arythea-ritual','Blood Ritual','draw',2,'round'),skill('arythea-mana','Red Crystal Craft','redCrystal',1,'round'),skill('arythea-resist','Fire Resistance','fireBlock',3),skill('arythea-fury','Fury','siege',2)],
   },
   goldyx: {
     name: 'Goldyx', armor: 2,
-    replacements: [['crystallize','crystal-joy','Crystal Joy','blue',{mana:'crystal'},{mana:'crystal',draw:2}],['rage','will-focus','Will Focus','red',{any:1},{any:4}]],
+    replacements: [
+      ['concentration','will-focus','Will Focus','green',choose(option('blue','Gain blue mana',{mana:'token',allowedMana:['blue']}),option('red','Gain red mana',{mana:'token',allowedMana:['red']}),option('white','Gain white mana',{mana:'token',allowedMana:['white']})),choose(option('blue','Gain blue mana',{mana:'token',allowedMana:['blue']}),option('red','Gain red mana',{mana:'token',allowedMana:['red']}),option('white','Gain white mana',{mana:'token',allowedMana:['white']}),option('gold','Gain gold mana',{gainManaColor:'gold'}))],
+      ['crystallize','crystal-joy','Crystal Joy','blue',{crystallize:true},{gainCrystalChoice:true,poweredByAny:true}],
+    ],
     skills: [skill('goldyx-blue','Blue Crystal Craft','blueCrystal',1),skill('goldyx-green','Green Crystal Craft','greenCrystal',1),skill('goldyx-flight','Freezing Flight','move',3),skill('goldyx-breath','Draconum Breath','fireAttack',3),skill('goldyx-focus','Will Focus','any',2),skill('goldyx-source','Source Opening','mana',1),skill('goldyx-rest','Meditation','draw',2,'round'),skill('goldyx-block','Scaled Armor','block',3),skill('goldyx-range','Arcane Bolt','ranged',2),skill('goldyx-hoard','Crystal Hoard','influence',3)],
   },
   norowas: {
     name: 'Norowas', armor: 2,
-    replacements: [['promise','noble-manners-norowas','Noble Manners','white',{influence:3},{influence:5,fame:1}],['rage','refreshing-walk','Refreshing Walk','green',{move:2},{move:4,heal:1}]],
+    replacements: [
+      ['promise','noble-manners-norowas','Noble Manners','white',{influence:2},{influence:4,reputation:1}],
+      ['tranquility','rejuvenate','Rejuvenate','green',choose(option('heal','Heal 1',{heal:1}),option('draw','Draw 1',{draw:1}),option('mana','Gain green mana',{mana:'token',allowedMana:['green']}),option('ready','Ready a level 1–2 Unit',{unitReady:1,maxUnitLevel:2})),choose(option('heal','Heal 2',{heal:2}),option('draw','Draw 2',{draw:2}),option('crystal','Gain a green crystal',{gainCrystalColor:'green'}),option('ready','Ready a level 1–3 Unit',{unitReady:1,maxUnitLevel:3}))],
+    ],
     skills: [skill('norowas-lead','Leadership','unitReady',1),skill('norowas-recruit','Recruiting','influence',3),skill('norowas-forest','Forest Paths','move',3),skill('norowas-bond','Unit Bond','anyCombat',3),skill('norowas-heal','Herbal Lore','heal',2),skill('norowas-range','Elven Archery','ranged',2),skill('norowas-command','Command','command',1,'round'),skill('norowas-mana','Nature Mana','greenCrystal',1),skill('norowas-fame','Inspiration','fame',1),skill('norowas-block','Woodland Guard','block',3)],
   },
   wolfhawk: {
     name: 'Wolfhawk', armor: 2,
-    replacements: [['swiftness','swift-reflexes','Swift Reflexes','white',{move:3},{ranged:4}],['determination','combat-training','Combat Training','blue',{block:3},{attack:3,block:3}]],
+    replacements: [
+      ['swiftness','swift-reflexes','Swift Reflexes','white',{move:2},choose(option('ranged','Ranged Attack 3',{ranged:3}),option('block','Block 3',{block:3}))],
+      ['stamina','tirelessness','Tirelessness','blue',{move:2},{move:4,draw:1}],
+      ['concentration','axe-throw','Axe Throw','white',choose(option('move','Move 2',{move:2}),option('ranged','Ranged Attack 1',{ranged:1})),{ranged:3,famePerDefeat:1}],
+    ],
     skills: [skill('wolfhawk-hunt','Hunting','move',3),skill('wolfhawk-duel','Dueling','attack',3),skill('wolfhawk-reflex','Reflexes','block',3),skill('wolfhawk-bow','Bow Training','ranged',3),skill('wolfhawk-lone','Lone Wolf','anyCombat',2),skill('wolfhawk-stalk','Stalking','siege',2),skill('wolfhawk-pace','Swift','draw',1),skill('wolfhawk-resist','Endurance','heal',1),skill('wolfhawk-fame','Renown','fame',1),skill('wolfhawk-focus','Combat Focus','iceAttack',2)],
   },
   krang: {
     name: 'Krang', armor: 2,
-    replacements: [['mana-draw','spirit-guides','Spirit Guides','white',{mana:'token'},{mana:'token',any:2}],['threaten','savage-harvest','Savage Harvest','red',{influence:2},{attack:5,reputation:-1}]],
+    replacements: [
+      ['march','savage-harvesting','Savage Harvesting','green',{move:2},{move:4,reputation:-1}],
+      ['threaten','ruthless-coercion','Ruthless Coercion','red',{influence:2},{influence:7,reputation:-2}],
+      ['rage','battle-rage','Battle Rage','red',choose(option('attack','Attack 2',{attack:2}),option('block','Block 2',{block:2})),{attack:5,woundCost:1}],
+    ],
     skills: [skill('krang-spirit','Spirit Guides','mana',1),skill('krang-savage','Savage Strength','attack',3),skill('krang-shaman','Shamanic Heal','heal',2),skill('krang-storm','Storm Call','siege',2),skill('krang-ward','Spirit Ward','block',3),skill('krang-path','Wild Paths','move',3),skill('krang-voice','Spirit Voice','influence',3),skill('krang-trance','Trance','draw',2,'round'),skill('krang-chaos','Chaos Magic','any',2),skill('krang-bond','Totem Bond','anyCombat',3)],
   },
   braevalar: {
     name: 'Braevalar', armor: 2,
-    replacements: [['march','druidic-paths','Druidic Paths','green',{move:3},{move:5}],['determination','elemental-bulwark','Elemental Bulwark','blue',{block:3},{iceBlock:5}]],
+    replacements: [
+      ['march','one-with-the-land','One With The Land','green',choose(option('move','Move 2',{move:2}),option('heal','Heal 1',{heal:1}),option('block','Block 2',{block:2})),choose(option('move','Move 4',{move:4}),option('heal','Heal 2',{heal:2}),option('terrain-block','Block from your terrain',{terrainBlock:true}))],
+      ['stamina','druidic-paths','Druidic Paths','blue',{move:2,reduceHexCost:1},{move:4,reduceTerrainCost:1}],
+    ],
     skills: [skill('braevalar-earth','Earth Mastery','block',3),skill('braevalar-air','Air Mastery','move',3),skill('braevalar-water','Water Mastery','iceAttack',2),skill('braevalar-fire','Fire Mastery','fireAttack',2),skill('braevalar-druid','Druidic Paths','move',3),skill('braevalar-storm','Storm','siege',2),skill('braevalar-calm','Calm','heal',2),skill('braevalar-cycle','Cycle of Nature','draw',2,'round'),skill('braevalar-mana','Elemental Bond','mana',1),skill('braevalar-ward','Elemental Ward','fireBlock',3)],
   },
 };
@@ -159,6 +184,7 @@ export const MAP_TILES = [
 
 export function applyCharacterDeck(baseCards, characterId) {
   const profile=CHARACTER_PROFILES[characterId]||CHARACTER_PROFILES.tovak;
-  const replacements=new Map(profile.replacements.map(item=>[item[0],item]));
-  return baseCards.map(card=>{const row=replacements.get(card.id);return row?{id:row[1],name:row[2],color:row[3],basic:row[4],strong:row[5]}:{...card};});
+  const cards=baseCards.map(card=>({...card}));
+  for(const row of profile.replacements){const index=cards.findIndex(card=>card.id===row[0]);if(index>=0)cards[index]={id:row[1],name:row[2],color:row[3],basic:row[4],strong:row[5]};}
+  return cards;
 }
