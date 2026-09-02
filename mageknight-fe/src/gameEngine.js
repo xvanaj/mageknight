@@ -406,10 +406,11 @@ export function reduceGame(input, action) {
       if(hex.revealed===false)return fail(state,'Explore that map tile before moving onto it.');
       if(isOccupiedByOpponent(state,hex))return fail(state,'Another Mage Knight occupies that space.');
       if (hex.enemy && SITES[hex.site]?.kind!=='adventure') return fail(state, 'An enemy blocks that space. Start combat to enter it.');
-      const provoked=provokingEnemies(state,hex);if(provoked.length)return fail(state,`Moving there would provoke ${provoked.map(item=>item.enemy.name).join(' and ')}. Defeat the rampaging enemy first.`);
+      const provoked=provokingEnemies(state,hex);
       const cost = TERRAIN_COST[state.time][hex.terrain]; if (!Number.isFinite(cost)) return fail(state, 'That terrain is impassable.');
       if (state.points.move < cost) return fail(state, `You need ${cost} Move.`);
-      state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r;state.player.atTurnStart=false;state.player.movedThisTurn=true; log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
+      const origin={q:state.player.q,r:state.player.r};state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r;state.player.atTurnStart=false;state.player.movedThisTurn=true; log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
+      if(provoked.length){const enemies=provoked.flatMap(source=>(source.enemy.members||source.enemies||[source.enemy]).map(enemy=>clone(enemy))),enemySources=Object.fromEntries(provoked.flatMap(source=>(source.enemy.members||source.enemies||[source.enemy]).map(enemy=>[enemyKey(enemy),{q:source.q,r:source.r,site:source.site}])));state.player.turnAction='combat';state.phase='combat-ranged';state.combat={q:null,r:null,origin,kind:'provoked',enemy:enemyGroup(enemies),enemies,enemySources,defeatedIds:[],blockedIds:[],blocked:false,woundsTaken:0,damageUnits:[]};log(state,`${provoked.map(item=>item.enemy.name).join(' and ')} attacked during movement.`);}
       return state;
     }
     case 'EXPLORE': {
@@ -637,7 +638,8 @@ function discardCombatSummons(state){
 function leaveCombatWithSurvivors(state){
   const combat=state.combat,hex=state.map.find(item=>item.q===combat.q&&item.r===combat.r),survivors=livingCombatEnemies(state),defeated=(combat.enemies||[]).filter(enemy=>(combat.defeatedIds||[]).includes(enemyKey(enemy)));
   if(defeated.length){const group=enemyGroup(defeated);gainFame(state,group.fame);state.player.defeated=(state.player.defeated||[]).concat(defeated.map(enemy=>({id:enemy.id,name:enemy.name,fame:enemy.fame})));}
-  if(hex){const discardSurvivors=combat.kind==='burn'||['dungeon','tomb'].includes(hex.site);hex.enemies=discardSurvivors?[]:clone(survivors);hex.enemy=discardSurvivors||!survivors.length?null:enemyGroup(survivors);if(combat.kind==='burn'){hex.burned=true;hex.conquered=false;}}
+  if(combat.kind==='provoked'){const coordinates=new Set(Object.values(combat.enemySources||{}).map(source=>`${source.q}:${source.r}`));for(const coordinate of coordinates){const [q,r]=coordinate.split(':').map(Number),sourceHex=state.map.find(item=>item.q===q&&item.r===r),remaining=survivors.filter(enemy=>{const source=combat.enemySources[enemyKey(enemy)];return source?.q===q&&source?.r===r;});if(sourceHex){sourceHex.enemies=clone(remaining);sourceHex.enemy=remaining.length?enemyGroup(remaining):null;}}for(const enemy of defeated){const site=combat.enemySources?.[enemyKey(enemy)]?.site;if(site==='rampaging')state.player.reputation=Math.min(5,state.player.reputation+1);if(site==='draconum')state.player.reputation=Math.min(5,state.player.reputation+2);}}
+  else if(hex){const discardSurvivors=combat.kind==='burn'||['dungeon','tomb'].includes(hex.site);hex.enemies=discardSurvivors?[]:clone(survivors);hex.enemy=discardSurvivors||!survivors.length?null:enemyGroup(survivors);if(combat.kind==='burn'){hex.burned=true;hex.conquered=false;}}
   state.phase='action';state.combat=null;log(state,defeated.length?`${defeated.length} defender${defeated.length===1?'':'s'} defeated; the site was not conquered.`:'Combat ended without defeating a defender.');return state;
 }
 
@@ -653,7 +655,7 @@ function checkVictory(state){
 }
 
 function winCombat(state, phase) {
-  const {q,r,enemy,kind}=state.combat; const hex=state.map.find(h=>h.q===q&&h.r===r); hex.enemy=null;
+  const {q,r,enemy,kind}=state.combat;if(kind==='provoked'){for(const source of Object.values(state.combat.enemySources||{})){const sourceHex=state.map.find(h=>h.q===source.q&&h.r===source.r);if(sourceHex){sourceHex.enemy=null;sourceHex.enemies=[];}}for(const member of enemy.members||[enemy]){const site=state.combat.enemySources?.[enemyKey(member)]?.site;if(site==='rampaging')state.player.reputation=Math.min(5,state.player.reputation+1);if(site==='draconum')state.player.reputation=Math.min(5,state.player.reputation+2);}gainFame(state,enemy.fame);state.player.defeated=(state.player.defeated||[]).concat((enemy.members||[enemy]).map(item=>({id:item.id,name:item.name,fame:item.fame})));state.phase='action';state.combat=null;log(state,`${enemy.name} defeated in the ${phase} phase for ${enemy.fame} Fame.`);return state;}const hex=state.map.find(h=>h.q===q&&h.r===r); hex.enemy=null;
   hex.enemies=[];gainFame(state,enemy.fame);state.player.defeated=(state.player.defeated||[]).concat((enemy.members||[enemy]).map(item=>({id:item.id,name:item.name,fame:item.fame}))); state.phase='action'; state.combat=null;
   if(kind==='fortified'){state.player.q=q;state.player.r=r;hex.conquered=true;hex.ownerId=state.player.id||state.player.character;}
   if(kind==='adventure'||kind==='burn')hex.conquered=true;
