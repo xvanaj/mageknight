@@ -147,7 +147,7 @@ function PvpPanel({game,dispatch}){const duel=game.pvp,mine=game.viewerPlayerId|
 function ActionPanel({game,here,dispatch}){
   const [endDiscards,setEndDiscards]=useState([]);
   const emptyFinalTurn=game.multiplayer&&game.roundEndTurnsRemaining!==null&&!game.player.hand.length,canEndRound=!game.player.deck.length&&game.player.atTurnStart&&(game.roundEndTurnsRemaining===null||emptyFinalTurn),woundCards=game.player.hand.filter(card=>card.id==='wound'),restCards=game.player.hand.filter(card=>card.id!=='wound');const city=here?.site==='city'&&here.conquered;
-  const validEndDiscards=endDiscards.filter(uid=>restCards.some(card=>card.uid===uid)),mustDiscard=!game.player.cardsPlayedThisTurn;
+  const validEndDiscards=endDiscards.filter(uid=>restCards.some(card=>card.uid===uid)),mustDiscard=!game.player.cardsPlayedThisTurn&&!game.player.emptyHandPassAllowed;
   const toggleEndDiscard=uid=>setEndDiscards(old=>old.includes(uid)?old.filter(item=>item!==uid):[...old,uid]);
   const recruits=game.offer.units.filter(u=>(city&&here.cityColor==='white')||u.sites.includes(here?.site)||(city&&u.sites.includes('city')));
   return <div className="actions"><p className="phase-help">{here?.site?<><b>{siteNames[here.site]}</b> — {SITES[here.site].rule}</>:'Play cards, move, interact, or end your turn.'}</p>
