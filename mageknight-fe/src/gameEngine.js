@@ -83,21 +83,64 @@ const CARDS = [
 ].map(([id, name, color, basic, strong]) => ({ id, name, color, basic, strong }));
 
 export const ENEMIES = {
-  prowlers: { id: 'prowlers', name: 'Orc Prowlers', armor: 3, attack: 4, fame: 2, traits: ['swift'] },
-  diggers: { id: 'diggers', name: 'Orc Diggers', armor: 4, attack: 3, fame: 2, traits: ['fortified'] },
-  golem: { id: 'golem', name: 'Iron Golem', armor: 4, attack: 5, fame: 3, traits: ['physical-resistant'] },
-  mage: { id: 'mage', name: 'Fire Mage', armor: 4, attack: 5, fame: 4, traits: ['fire', 'fortified'] },
-  guards: { id: 'guards', name: 'Keep Guards', armor: 5, attack: 4, fame: 4, traits: ['fortified'] },
-  dragon: { id: 'dragon', name: 'Fire Dragon', armor: 7, attack: 7, fame: 8, traits: ['fire', 'brutal'] },
+  ...EXTENDED_ENEMIES,
+  diggers:{id:'diggers',name:'Diggers',armor:3,attack:3,fame:2,traits:['fortified']},
+  prowlers:{id:'prowlers',name:'Prowlers',armor:3,attack:4,fame:2,traits:[]},
+  cursedHags:{id:'cursedHags',name:'Cursed Hags',armor:5,attack:3,fame:3,traits:['poison']},
+  wolfRiders:{id:'wolfRiders',name:'Wolf Riders',armor:4,attack:3,fame:3,traits:['swift']},
+  ironclads:{id:'ironclads',name:'Ironclads',armor:3,attack:4,fame:4,traits:['physical-resistant','brutal']},
+  orcSummoners:{id:'orcSummoners',name:'Orc Summoners',armor:4,attack:0,fame:4,traits:['summon']},
+  crossbowmen:{id:'crossbowmen',name:'Crossbowmen',armor:4,attack:4,fame:3,traits:['swift']},
+  guardsmen:{id:'guardsmen',name:'Guardsmen',armor:7,attack:3,fame:3,traits:['fortified']},
+  swordsmen:{id:'swordsmen',name:'Swordsmen',armor:5,attack:6,fame:4,traits:[]},
+  golems:{id:'golems',name:'Golems',armor:5,attack:2,fame:4,traits:['physical-resistant']},
+  heroesEnemy:{id:'heroesEnemy',name:'Heroes',armor:4,attack:5,fame:5,traits:['fortified'],attacks:[{attack:5,traits:[]},{attack:3,traits:[]}],reputation:-1},
+  airElemental:{id:'airElemental',name:'Air Elemental',armor:4,elusiveArmor:8,attack:3,fame:4,traits:['coldfire','fire-resistant','ice-resistant','swift','elusive']},
+  minotaur:{id:'minotaur',name:'Minotaur',armor:5,attack:5,fame:4,traits:['brutal']},
+  gargoyle:{id:'gargoyle',name:'Gargoyle',armor:4,attack:5,fame:4,traits:['physical-resistant']},
+  medusaBase:{id:'medusaBase',name:'Medusa',armor:4,attack:6,fame:5,traits:['paralyze']},
+  cryptWormBase:{id:'cryptWormBase',name:'Crypt Worm',armor:6,attack:6,fame:5,traits:['fortified']},
+  werewolf:{id:'werewolf',name:'Werewolf',armor:5,attack:7,fame:5,traits:['swift']},
+  shadow:{id:'shadow',name:'Shadow',armor:4,elusiveArmor:8,attack:4,fame:4,traits:['coldfire','elusive','arcane-immunity']},
+  fireElemental:{id:'fireElemental',name:'Fire Elemental',armor:6,attack:7,fame:4,traits:['fire-resistant']},
+  monksEnemy:{id:'monksEnemy',name:'Monks',armor:5,attack:5,fame:4,traits:['poison']},
+  illusionistsEnemy:{id:'illusionistsEnemy',name:'Illusionists',armor:3,attack:0,fame:4,traits:['physical-resistant','summon']},
+  iceMagesEnemy:{id:'iceMagesEnemy',name:'Ice Mages',armor:6,attack:5,fame:5,traits:['ice','ice-resistant']},
+  fireMagesEnemy:{id:'fireMagesEnemy',name:'Fire Mages',armor:5,attack:6,fame:5,traits:['fire','fire-resistant']},
+  iceGolemsEnemy:{id:'iceGolemsEnemy',name:'Ice Golems',armor:4,attack:2,fame:5,traits:['ice','ice-resistant','physical-resistant','paralyze']},
+  fireGolemsEnemy:{id:'fireGolemsEnemy',name:'Fire Golems',armor:4,attack:3,fame:5,traits:['fire','fire-resistant','physical-resistant','brutal']},
+  thugsEnemy:{id:'thugsEnemy',name:'Thugs',armor:5,attack:6,fame:5,traits:[]},
+  shocktroopsEnemy:{id:'shocktroopsEnemy',name:'Shocktroops',armor:5,attack:5,fame:5,traits:['swift','brutal']},
+  freezers:{id:'freezers',name:'Freezers',armor:7,attack:3,fame:7,traits:['ice','fire-resistant','paralyze','swift']},
+  gunners:{id:'gunners',name:'Gunners',armor:6,attack:6,fame:7,traits:['fire','ice-resistant','brutal']},
+  fireCatapult:{id:'fireCatapult',name:'Fire Catapult',armor:7,attack:8,fame:7,traits:['fire','fortified','cumbersome']},
+  iceCatapult:{id:'iceCatapult',name:'Ice Catapult',armor:6,attack:9,fame:7,traits:['ice','fortified','cumbersome']},
+  altemGuardsmen:{id:'altemGuardsmen',name:'Altem Guardsmen',armor:7,attack:5,fame:8,traits:['physical-resistant','fire-resistant','ice-resistant','fortified']},
+  altemMages:{id:'altemMages',name:'Altem Mages',armor:8,attack:4,fame:8,traits:['coldfire','physical-resistant','brutal','poison']},
+  swampDragon:{id:'swampDragon',name:'Swamp Dragon',armor:9,attack:5,fame:7,traits:['swift','paralyze']},
+  fireDragon:{id:'fireDragon',name:'Fire Dragon',armor:7,attack:9,fame:8,traits:['fire','physical-resistant','fire-resistant']},
+  iceDragonBase:{id:'iceDragonBase',name:'Ice Dragon',armor:7,attack:6,fame:8,traits:['ice','physical-resistant','ice-resistant','paralyze']},
+  highDragonBase:{id:'highDragonBase',name:'High Dragon',armor:9,attack:6,fame:9,traits:['coldfire','fire-resistant','ice-resistant','brutal']},
+  deathDragon:{id:'deathDragon',name:'Death Dragon',armor:9,attack:7,fame:6,traits:['assassination','paralyze']},
+  golem: { id:'golem',name:'Golem',armor:5,attack:2,fame:4,traits:['physical-resistant'] },
+  mage: { id:'mage',name:'Fire Mage',armor:5,attack:6,fame:5,traits:['fire','fire-resistant'] },
+  guards: { id:'guards',name:'Guardsmen',armor:7,attack:3,fame:3,traits:['fortified'] },
+  dragon: { id:'dragon',name:'Fire Dragon',armor:7,attack:9,fame:8,traits:['fire','physical-resistant','fire-resistant'] },
+  iceDragon: { id:'iceDragon',name:'Ice Dragon',armor:7,attack:6,fame:8,traits:['ice','physical-resistant','ice-resistant','paralyze'] },
+  highDragon: { id:'highDragon',name:'High Dragon',armor:9,attack:6,fame:9,traits:['coldfire','fire-resistant','ice-resistant','brutal'] },
   city: { id: 'city', name: 'City Garrison', armor: 8, attack: 7, fame: 10, traits: ['fortified', 'brutal'] },
   tomb: { id:'tomb', name:'Crypt Guardian', armor:6, attack:6, fame:5, traits:['fire','physical-resistant'] },
   den: { id:'den', name:'Cave Monster', armor:5, attack:5, fame:4, traits:[] },
   spawn: { id:'spawn', name:'Spawn Pair', armor:8, attack:8, fame:7, traits:['brutal'] },
-  ...EXTENDED_ENEMIES,
 };
 
 const ENEMY_POOLS={
-  orc:['prowlers','prowlers','diggers','diggers','orcTrackers','orcTrackers','orcSummoners','orcSummoners'],grey:['guards','guards','guards','golem','golem','gargoyles','gargoyles','gargoyles'],violet:['mage','mage','mage','medusa','medusa','iceGolems','iceGolems','iceGolems'],brown:['golem','golem','den','den','cryptWorm','cryptWorm','medusa','medusa'],red:['tomb','tomb','tomb','iceDragon','iceDragon','highDragon','highDragon','highDragon'],dragon:['dragon','dragon','dragon','iceDragon','iceDragon','iceDragon','highDragon','highDragon'],white:['guards','guards','mage','mage','gargoyles','gargoyles','golem','golem','city','city','guards','mage','gargoyles','golem','city','city'],
+  orc:['diggers','diggers','prowlers','prowlers','cursedHags','cursedHags','wolfRiders','wolfRiders','ironclads','ironclads','orcSummoners','orcSummoners'],
+  grey:['crossbowmen','crossbowmen','crossbowmen','guardsmen','guardsmen','guardsmen','swordsmen','swordsmen','golems','golems','heroesEnemy'],
+  brown:['airElemental','airElemental','minotaur','minotaur','gargoyle','gargoyle','medusaBase','medusaBase','cryptWormBase','cryptWormBase','werewolf','werewolf','shadow','shadow','fireElemental','fireElemental'],
+  violet:['monksEnemy','monksEnemy','illusionistsEnemy','illusionistsEnemy','iceMagesEnemy','iceMagesEnemy','fireMagesEnemy','fireMagesEnemy','iceGolemsEnemy','fireGolemsEnemy'],
+  white:['thugsEnemy','thugsEnemy','shocktroopsEnemy','shocktroopsEnemy','freezers','freezers','freezers','gunners','gunners','gunners','fireCatapult','iceCatapult','altemGuardsmen','altemGuardsmen','altemMages','altemMages'],
+  red:['swampDragon','swampDragon','fireDragon','fireDragon','iceDragonBase','iceDragonBase','highDragonBase','highDragonBase','deathDragon','deathDragon'],
 };
 
 export const UNITS = [
@@ -153,7 +196,7 @@ const enemyKey=enemy=>enemy.uid||enemy.id;
 const withCityBonus=(enemy,color)=>{const result=clone(enemy),traits=new Set(result.traits||[]),elemental=['fire','ice','coldfire'].find(type=>traits.has(type));if(color==='white')result.armor++;if(color==='blue'&&elemental)result.attack+=elemental==='coldfire'?1:2;if(color==='red'&&!elemental)traits.add('brutal');if(color==='green'&&!elemental)traits.add('poison');result.traits=[...traits];return result;};
 const livingCombatEnemies=state=>(state.combat?.enemies||[state.combat?.enemy].filter(Boolean)).filter(enemy=>!(state.combat?.defeatedIds||[]).includes(enemyKey(enemy)));
 const chosenCombatEnemies=(state,ids)=>{const living=livingCombatEnemies(state);if(!ids?.length)return living;const chosen=new Set(ids);return living.filter(enemy=>chosen.has(enemyKey(enemy)));};
-const markCombatDefeated=(state,enemies)=>{state.combat.defeatedIds=state.combat.defeatedIds||[];const site=state.map.find(hex=>hex.q===state.combat.q&&hex.r===state.combat.r),identity=state.player.id||state.player.character;for(const enemy of enemies){const id=enemyKey(enemy);if(state.combat.defeatedIds.includes(id))continue;state.combat.defeatedIds.push(id);if(site?.site==='city'&&state.combat.enemySources?.[id]?.siteDefender){site.cityShields=site.cityShields||{};site.cityShieldOrder=site.cityShieldOrder||[];site.cityShields[identity]=(site.cityShields[identity]||0)+1;site.cityShieldOrder.push(identity);}}};
+const markCombatDefeated=(state,enemies)=>{state.combat.defeatedIds=state.combat.defeatedIds||[];const site=state.map.find(hex=>hex.q===state.combat.q&&hex.r===state.combat.r),identity=state.player.id||state.player.character;for(const enemy of enemies){const id=enemyKey(enemy);if(state.combat.defeatedIds.includes(id))continue;state.combat.defeatedIds.push(id);if(enemy.reputation)state.player.reputation=Math.max(-7,Math.min(5,state.player.reputation+enemy.reputation));if(site?.site==='city'&&state.combat.enemySources?.[id]?.siteDefender){site.cityShields=site.cityShields||{};site.cityShieldOrder=site.cityShieldOrder||[];site.cityShields[identity]=(site.cityShields[identity]||0)+1;site.cityShieldOrder.push(identity);}}};
 const spendCombatPoints=(state,keys)=>keys.forEach(key=>{state.points[key]=0;});
 const effectiveBlock=(state,enemy)=>{const traits=enemy.traits||[];const physical=state.points.block,ice=state.points.iceBlock,fire=state.points.fireBlock,coldfire=state.points.coldfireBlock;if(traits.includes('coldfire'))return coldfire+Math.floor((physical+ice+fire)/2);if(traits.includes('fire'))return ice+coldfire+Math.floor((physical+fire)/2);if(traits.includes('ice'))return fire+coldfire+Math.floor((physical+ice)/2);return physical+ice+fire+coldfire;};
 const canDefeatWithAttack=(enemies,power)=>{const traits=enemies.flatMap(enemy=>enemy.traits||[]),armor=enemies.reduce((sum,enemy)=>sum+enemy.armor,0),physical=Math.floor(power.physical/(traits.includes('physical-resistant')?2:1)),ice=Math.floor(power.ice/(traits.includes('ice-resistant')?2:1)),fire=Math.floor(power.fire/(traits.includes('fire-resistant')?2:1)),coldfire=Math.floor((power.coldfire||0)/(traits.includes('fire-resistant')&&traits.includes('ice-resistant')?2:1));return physical+ice+fire+coldfire>=armor;};
@@ -201,7 +244,7 @@ const handLimit = state => {
 const prepareMap=(exploration,selectedTileIds=MAP_TILES.map(tile=>tile.id))=>{
   const selected=new Set(selectedTileIds);
   const portal={q:0,r:0,s:0,terrain:'plains',site:'portal',enemy:null,enemies:[],tileId:'portal',core:false,enemyCategory:null,enemyFaceDown:false,revealed:true};
-  const hexes=MAP_TILES.filter(tile=>selected.has(tile.id)).flatMap(tile=>tile.hexes.map(row=>{const [q,r,terrain,site=null,enemyId=null,cityColor=null]=row,category=site==='rampaging'?'orc':site==='draconum'?'dragon':site==='keep'?'grey':site==='mage-tower'?'violet':['dungeon','monster-den','spawning-grounds'].includes(site)?'brown':site==='tomb'?'red':null,baseEnemy=enemyId?clone(ENEMIES[enemyId]):null,enemy=baseEnemy?{...baseEnemy,category,uid:`${q}:${r}:${enemyId}`}:null;return {q,r,s:-q-r,terrain,site,mineColor:site==='mine'?COLORS[(Math.abs(q)+Math.abs(r))%4]:undefined,enemy,enemies:enemy?[clone(enemy)]:[],cityColor,tileId:tile.id,core:Boolean(tile.core),enemyCategory:category,enemyFaceDown:['keep','mage-tower','city'].includes(site)&&Boolean(enemy),conquered:false,burned:false,used:false,revealed:!exploration};}));
+  const hexes=MAP_TILES.filter(tile=>selected.has(tile.id)).flatMap(tile=>tile.hexes.map(row=>{const [q,r,terrain,site=null,enemyId=null,cityColor=null]=row,category=site==='rampaging'?'orc':site==='draconum'?'red':site==='keep'?'grey':site==='mage-tower'?'violet':['dungeon','monster-den','spawning-grounds'].includes(site)?'brown':site==='tomb'?'red':null,baseEnemy=enemyId?clone(ENEMIES[enemyId]):null,enemy=baseEnemy?{...baseEnemy,category,uid:`${q}:${r}:${enemyId}`}:null;return {q,r,s:-q-r,terrain,site,mineColor:site==='mine'?COLORS[(Math.abs(q)+Math.abs(r))%4]:undefined,enemy,enemies:enemy?[clone(enemy)]:[],cityColor,tileId:tile.id,core:Boolean(tile.core),enemyCategory:category,enemyFaceDown:['keep','mage-tower','city'].includes(site)&&Boolean(enemy),conquered:false,burned:false,used:false,revealed:!exploration};}));
   hexes.filter(hex=>['monster-den','spawning-grounds'].includes(hex.site)).forEach(hex=>{hex.enemy=null;hex.enemies=[];});
   return [portal,...hexes];
 };
@@ -601,7 +644,7 @@ export function reduceGame(input, action) {
     }
     case 'RESOLVE_ATTACK': {
       if(state.phase!=='combat-attack')return fail(state,'Not in the Attack phase.');const targets=chosenCombatEnemies(state,action.targetIds);if(!targets.length)return fail(state,'Choose at least one living enemy.');
-      const firstId=action.targetIds?.[0]||enemyKey(targets[0]),adjusted=targets.map(enemy=>{let armor=enemy.armor;if(enemy.traits.includes('elusive')&&!enemyFullyBlocked(state,enemy))armor=Math.ceil(armor*1.5);if(!state.combat.attackStarted&&enemyKey(enemy)===firstId&&enemy.defense)armor+=enemy.defense;return armor===enemy.armor?enemy:{...enemy,armor};}),power={physical:state.points.attack+state.points.ranged+state.points.siege,ice:state.points.iceAttack,fire:state.points.fireAttack,coldfire:state.points.coldfireAttack},required=adjusted.reduce((sum,enemy)=>sum+enemy.armor,0);if(!canDefeatWithAttack(adjusted,power))return fail(state,`The effective Attack cannot defeat this group (${required} total Armor; ${power.physical} physical, ${power.ice} ice, ${power.fire} fire, ${power.coldfire} cold fire available).`);
+      const firstId=action.targetIds?.[0]||enemyKey(targets[0]),adjusted=targets.map(enemy=>{let armor=enemy.armor;if(enemy.traits.includes('elusive')&&!enemyFullyBlocked(state,enemy))armor=enemy.elusiveArmor||Math.ceil(armor*1.5);if(!state.combat.attackStarted&&enemyKey(enemy)===firstId&&enemy.defense)armor+=enemy.defense;return armor===enemy.armor?enemy:{...enemy,armor};}),power={physical:state.points.attack+state.points.ranged+state.points.siege,ice:state.points.iceAttack,fire:state.points.fireAttack,coldfire:state.points.coldfireAttack},required=adjusted.reduce((sum,enemy)=>sum+enemy.armor,0);if(!canDefeatWithAttack(adjusted,power))return fail(state,`The effective Attack cannot defeat this group (${required} total Armor; ${power.physical} physical, ${power.ice} ice, ${power.fire} fire, ${power.coldfire} cold fire available).`);
       state.combat.attackStarted=true;markCombatDefeated(state,targets);spendCombatPoints(state,['attack','iceAttack','fireAttack','coldfireAttack','ranged','siege']);log(state,`${targets.map(enemy=>enemy.name).join(', ')} defeated in melee.`);if(!livingCombatEnemies(state).length)return winCombat(state,'attack');return state;
     }
     case 'END_COMBAT': if(state.phase!=='combat-attack')return fail(state,'Combat may be ended after damage is assigned.');return leaveCombatWithSurvivors(state);
