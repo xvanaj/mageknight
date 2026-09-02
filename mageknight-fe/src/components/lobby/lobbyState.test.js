@@ -42,3 +42,9 @@ test('host-only and forged join actions are rejected for authenticated guests', 
   expect(guestLobbyAction({ type: 'SET_SCENARIO', scenario: 'blitz-conquest' }, guest.id)).toBeNull();
   expect(guestLobbyAction({ type: 'JOIN', player: host }, guest.id)).toBeNull();
 });
+
+test('official Full Cooperation setup rejects a fourth actual player', () => {
+  const players = Array.from({ length: 4 }, (_, index) => ({ id: `p${index}`, connected: true, character: `c${index}`, ready: true }));
+  expect(canStartLobby({ scenario: 'cooperative-conquest', players })).toBe(false);
+  expect(canStartLobby({ scenario: 'full-conquest', players })).toBe(true);
+});
