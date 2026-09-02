@@ -208,7 +208,7 @@ function drawEnemyToken(state,category){if(!state.enemyDecks[category]?.length&&
 function discardEnemyTokens(state,enemies){for(const enemy of enemies){if(!enemy.category||enemy.uid?.startsWith('rival-keep-'))continue;const token=clone(enemy);delete token.summonerId;state.enemyDiscards[enemy.category]=state.enemyDiscards[enemy.category]||[];state.enemyDiscards[enemy.category].push(token);}}
 function revealEnemyTokens(state,tileId){state.map.filter(hex=>hex.tileId===tileId&&hex.enemyCategory&&hex.site!=='spawning-grounds').forEach(hex=>{const token=drawEnemyToken(state,hex.enemyCategory);if(token){hex.enemy={...token,uid:`${hex.q}:${hex.r}:${token.uid}`};hex.enemies=[clone(hex.enemy)];hex.enemyFaceDown=['keep','mage-tower'].includes(hex.site);}});}
 function revealVisibleGarrisons(state){const players=state.players||[state.player];state.map.filter(hex=>hex.revealed!==false&&hex.enemyFaceDown&&hex.enemy&&['keep','mage-tower','city'].includes(hex.site)).forEach(hex=>{const adjacent=players.some(player=>distance(player,hex)<=1);if(adjacent&&(hex.site==='city'||state.time==='day'))hex.enemyFaceDown=false;});}
-function setupRuins(state){state.map.filter(hex=>hex.site==='ruins').forEach((ruins,index)=>{const roll=(state.seed+index)%3;if(roll===0){ruins.enemy=null;ruins.ruinsToken={type:'altar',color:COLORS[(state.seed+index)%COLORS.length],fame:7,faceDown:false};}else if(roll===1)ruins.ruinsToken={type:'enemies',reward:'artifact',faceDown:false};else ruins.ruinsToken={type:'enemies',reward:'crystals',count:4,faceDown:false};});}
+function setupRuins(state){const rewards=['artifact','spell','advanced','unit','crystals'];state.map.filter(hex=>hex.site==='ruins').forEach((ruins,index)=>{const roll=(state.seed+index)%6;if(roll===0){ruins.enemy=null;ruins.enemies=[];ruins.ruinsToken={type:'altar',color:COLORS[(state.seed+index)%COLORS.length],fame:7,faceDown:false};}else{const reward=rewards[roll-1];ruins.ruinsToken={type:'enemies',reward,...(reward==='crystals'?{count:4}:{}),faceDown:false};}});}
 
 const makePlayer=(seed,character='tovak',name)=>{
   const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
@@ -791,7 +791,7 @@ function winCombat(state, phase) {
   if(hex.site==='tomb')state.pendingRewards.push({type:'spell',source:'Tomb'},{type:'artifact',source:'Tomb'});
   if(hex.site==='monster-den')state.pendingRewards.push({type:'crystals',count:2,source:'Monster Den'});
   if(hex.site==='spawning-grounds')state.pendingRewards.push({type:'artifact',source:'Spawning Grounds'},{type:'crystals',count:3,source:'Spawning Grounds'});
-  if(hex.site==='ruins')state.pendingRewards.push(hex.ruinsToken?.reward==='artifact'?{type:'artifact',source:'Ancient Ruins'}:{type:'crystals',count:hex.ruinsToken?.count||4,source:'Ancient Ruins'});
+  if(hex.site==='ruins'){const reward=hex.ruinsToken?.reward||'crystals';state.pendingRewards.push({type:reward,...(reward==='crystals'?{count:hex.ruinsToken?.count||4}:{}),source:'Ancient Ruins'});}
   if(hex.site==='rampaging')state.player.reputation=Math.min(5,state.player.reputation+1);
   if(hex.site==='draconum')state.player.reputation=Math.min(5,state.player.reputation+2);
   if(hex.site==='city'){state.player.cities++;checkVictory(state);}
@@ -808,10 +808,14 @@ function claimReward(state,action){
     if(!reward.rolls)return fail(state,'Roll the crystal rewards first.');const goldCount=reward.rolls.filter(color=>color==='gold').length,colors=(action.colors||[]).filter(color=>COLORS.includes(color));if(colors.length!==goldCount)return fail(state,`Choose ${goldCount} basic color${goldCount===1?'':'s'} for the gold result${goldCount===1?'':'s'}.`);let goldIndex=0;reward.rolls.forEach(result=>{if(result==='black')gainFame(state,1);else{const color=result==='gold'?colors[goldIndex++]:result;if(state.player.crystals[color]<3)state.player.crystals[color]++;}});
   } else if(reward.type==='artifact'){
     if(!reward.options)return fail(state,'Reveal the Artifact choices first.');const count=Math.min(reward.count||1,reward.options.length),ids=[...new Set(action.ids||[action.id].filter(Boolean))];if(ids.length!==count||ids.some(id=>!reward.options.some(card=>card.id===id)))return fail(state,`Choose exactly ${count} revealed Artifact${count===1?'':'s'}.`);const chosen=ids.map(id=>reward.options.find(card=>card.id===id));state.player.deck.unshift(...chosen.map(card=>cardWithUid(card,state)));state.decks.artifacts.push(...reward.options.filter(card=>!ids.includes(card.id)));
-  } else {
+  } else if(reward.type==='advanced'){
+    const card=state.offer.advanced.find(item=>item.id===action.id);if(!card)return fail(state,'Choose an Advanced Action from the offer.');state.player.deck.unshift(cardWithUid(card,state));state.offer.advanced=state.offer.advanced.filter(item=>item.id!==card.id);if(state.decks.advanced.length)state.offer.advanced.push(state.decks.advanced.shift());
+  } else if(reward.type==='unit'){
+    if(action.forfeit){state.pendingRewards.shift();log(state,`Forfeited the Unit reward from ${reward.source}.`);return state;}const unit=state.offer.units.find(item=>item.id===action.id);if(!unit)return fail(state,'Choose a Unit from the offer.');const futureCommand=Array.from({length:Math.max(0,levelFor(state.player.fame)-state.player.level)},(_,index)=>state.player.level+index+1).filter(level=>level%2===1).length,capacity=state.player.command+futureCommand,full=state.player.units.length>=capacity,disband=full?state.player.units.find(item=>item.id===action.disbandUnitId):null;if(full&&!disband)return fail(state,'No Command slot is available; choose a Unit to disband or forfeit this reward.');if(disband){state.player.units=state.player.units.filter(item=>item.id!==disband.id);if(disband.banner)state.player.discard.push(disband.banner);}state.player.units.push({...unit,spent:false,wounded:false,woundCount:0});state.offer.units=state.offer.units.filter(item=>item.id!==unit.id);
+  } else if(reward.type==='spell'){
     const offer=state.offer.spells;const card=offer.find(c=>c.id===action.id);if(!card)return fail(state,`No ${reward.type} is available.`);
     state.player.deck.unshift(cardWithUid(card,state));state.offer.spells=state.offer.spells.filter(c=>c.id!==card.id);if(state.decks.spells.length)state.offer.spells.push(state.decks.spells.shift());
-  }
+  } else return fail(state,'That reward type is unsupported.');
   state.pendingRewards.shift();log(state,`Claimed ${reward.type} reward from ${reward.source}.`);return state;
 }
 
