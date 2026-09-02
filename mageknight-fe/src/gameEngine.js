@@ -279,6 +279,22 @@ export function gameViewForPlayer(input,playerId){
 }
 
 function freshPoints() { return { move: 0, influence: 0, heal: 0, attack: 0, block: 0, ranged: 0, siege: 0, iceAttack:0, fireAttack:0, coldfireAttack:0, iceBlock:0, fireBlock:0, coldfireBlock:0 }; }
+const EFFECT_PHASES = {
+  move:['action','cooperative-entry'],
+  influence:['action'], heal:['action'], draw:['action'], mana:['action'], command:['action'], fame:['action'], unitReady:['action'],
+  blueCrystal:['action'], redCrystal:['action'], greenCrystal:['action'], whiteCrystal:['action'],
+  ranged:['combat-ranged','combat-attack'], siege:['combat-ranged','combat-attack'],
+  block:['combat-block'], iceBlock:['combat-block'], fireBlock:['combat-block'], coldfireBlock:['combat-block'],
+  attack:['combat-attack'], iceAttack:['combat-attack'], fireAttack:['combat-attack'], coldfireAttack:['combat-attack'],
+  armorBreak:['combat-ranged','combat-block','combat-attack'],
+};
+const effectAllowedInPhase=(effect,phase)=>(EFFECT_PHASES[effect]||[]).includes(phase);
+export const legalUnitAbilities=(unit,phase)=>Object.keys(unit?.ability||{}).filter(effect=>effectAllowedInPhase(effect,phase));
+export const legalSkillModes=(skill,phase)=>{
+  if(skill?.effect==='any')return ['move','influence','attack','block'].filter(effect=>effectAllowedInPhase(effect,phase));
+  if(skill?.effect==='anyCombat')return ['ranged','siege','attack','block'].filter(effect=>effectAllowedInPhase(effect,phase));
+  return skill?.effect&&effectAllowedInPhase(skill.effect,phase)?[skill.effect]:[];
+};
 function currentHex(state) { return state.map.find(h => h.q === state.player.q && h.r === state.player.r); }
 const movementCost=(state,hex)=>hex?.site==='city'?2:TERRAIN_COST[state.time][hex?.terrain];
 const isSafeSpace=(state,player,hex)=>{if(!hex||!Number.isFinite(TERRAIN_COST[state.time][hex.terrain]))return false;const identity=player.id||player.character,fortified=SITES[hex.site]?.kind==='fortified';if((fortified&&!hex.conquered)||(hex.site==='keep'&&hex.conquered&&hex.ownerId!==identity))return false;const sharedAllowed=hex.site==='portal'||(hex.site==='city'&&hex.conquered);return sharedAllowed||!(state.players||[]).some(other=>other.id!==player.id&&other.q===hex.q&&other.r===hex.r);};
@@ -454,8 +470,10 @@ export function reduceGame(input, action) {
     case 'USE_UNIT': {
       const unit = state.player.units.find(u => u.id === action.id); if (!unit || unit.spent||unit.wounded) return fail(state, 'That unit is unavailable or wounded.');
       if(state.combat && SITES[state.map.find(h=>h.q===state.combat.q&&h.r===state.combat.r)?.site]?.underground)return fail(state,'Units cannot be used in a Dungeon or Tomb.');
-      const unitCombatStats={'combat-ranged':['ranged','siege'],'combat-block':['block','iceBlock','fireBlock','coldfireBlock'],'combat-attack':['attack','iceAttack','fireAttack','coldfireAttack','ranged','siege'],'cooperative-entry':['move']}[state.phase];if(unitCombatStats&&!unitCombatStats.some(stat=>unit.ability?.[stat]))return fail(state,`That Unit has no ability usable in the ${state.phase.replace('combat-','')} phase.`);if(!['action','cooperative-entry','combat-ranged','combat-block','combat-attack'].includes(state.phase))return fail(state,'That Unit cannot be activated in this phase.');
-      addEffect(state, unit.ability); unit.spent = true;state.player.atTurnStart=false; log(state, `${unit.name} activated.`); return state;
+      if(!['action','cooperative-entry','combat-ranged','combat-block','combat-attack'].includes(state.phase))return fail(state,'That Unit cannot be activated in this phase.');
+      const abilities=legalUnitAbilities(unit,state.phase);if(!abilities.length)return fail(state,`That Unit has no ability usable in the ${state.phase.replace('combat-','')} phase.`);
+      if(abilities.length>1&&!abilities.includes(action.abilityAs))return fail(state,'Choose which Unit ability to activate.');
+      const ability=abilities.length===1?abilities[0]:action.abilityAs;addEffect(state,{[ability]:unit.ability[ability]});unit.spent = true;state.player.atTurnStart=false;log(state,`${unit.name} activated for ${ability} ${unit.ability[ability]}.`);return state;
     }
     case 'ASSIGN_BANNER': {
       if(state.phase!=='action')return fail(state,'Assign Banners during your turn.');const index=state.player.hand.findIndex(card=>card.uid===action.uid&&isBanner(card)),unit=state.player.units.find(item=>item.id===action.unitId);if(index<0)return fail(state,'That Banner is not in your hand.');if(!unit)return fail(state,'Choose one of your Units.');if(unit.banner)state.player.discard.push(unit.banner);unit.banner={...state.player.hand.splice(index,1)[0],used:false};state.player.atTurnStart=false;log(state,`${unit.banner.name} was assigned to ${unit.name}.`);return state;
@@ -614,7 +632,7 @@ function activateSkill(state,action){
   if(skill.id==='who-needs-magic'){state.bonuses.sideways={value:state.sourceTaken?2:3,skill:skill.id};return mark();}
   if(skill.id==='motivation'){if(state.combat)return fail(state,'Motivation cannot be used during combat.');draw(state,2);state.mana.push('blue');return mark();}
   if(skill.id==='mana-overload'){const color=action.color;if(!COLORS.includes(color))return fail(state,'Choose a basic mana color.');state.mana.push(color);state.bonuses.manaOverload={color};return mark();}
-  if(skill.effect){if((skill.effect==='any'||skill.effect==='anyCombat')&&!['move','influence','attack','block','ranged','siege'].includes(action.mode))return fail(state,'Choose the power this Skill should provide.');if(skill.effect==='mana'&&!COLORS.includes(action.color))return fail(state,'Choose a basic mana color.');if(skill.effect==='unitReady'&&!state.player.units.some(unit=>unit.id===action.unitId&&unit.spent))return fail(state,'Choose a spent Unit to ready.');addEffect(state,{[skill.effect]:skill.value},null,{effectAs:action.mode,manaColor:action.color,unitId:action.unitId});return mark();}
+  if(skill.effect){const modes=legalSkillModes(skill,state.phase),resolved=['any','anyCombat'].includes(skill.effect)?action.mode:skill.effect;if(!modes.includes(resolved))return fail(state,modes.length?'Choose a Skill power available in this phase.':'That Skill cannot be used in this phase.');if(skill.effect==='mana'&&!COLORS.includes(action.color))return fail(state,'Choose a basic mana color.');if(skill.effect==='unitReady'&&!state.player.units.some(unit=>unit.id===action.unitId&&unit.spent))return fail(state,'Choose a spent Unit to ready.');if(skill.effect==='armorBreak'){if(!state.combat)return fail(state,'Resistance Break requires an enemy in combat.');const reduction=resistanceCount(state.combat.enemy);if(!reduction)return fail(state,'That enemy has no resistance to break.');state.combat.enemy.armor=Math.max(1,state.combat.enemy.armor-reduction);return mark();}addEffect(state,{[skill.effect]:skill.value},null,{effectAs:action.mode,manaColor:action.color,unitId:action.unitId});return mark();}
   return fail(state,'This Skill has no implemented effect.');
 }
 
