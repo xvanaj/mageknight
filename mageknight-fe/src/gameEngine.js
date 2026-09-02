@@ -398,6 +398,7 @@ export function reduceGame(input, action) {
     case 'USE_UNIT': {
       const unit = state.player.units.find(u => u.id === action.id); if (!unit || unit.spent||unit.wounded) return fail(state, 'That unit is unavailable or wounded.');
       if(state.combat && SITES[state.map.find(h=>h.q===state.combat.q&&h.r===state.combat.r)?.site]?.underground)return fail(state,'Units cannot be used in a Dungeon or Tomb.');
+      const unitCombatStats={'combat-ranged':['ranged','siege'],'combat-block':['block','iceBlock','fireBlock'],'combat-attack':['attack','iceAttack','fireAttack','ranged','siege']}[state.phase];if(unitCombatStats&&!unitCombatStats.some(stat=>unit.ability?.[stat]))return fail(state,`That Unit has no ability usable in the ${state.phase.replace('combat-','')} phase.`);if(!['action','combat-ranged','combat-block','combat-attack'].includes(state.phase))return fail(state,'That Unit cannot be activated in this phase.');
       addEffect(state, unit.ability); unit.spent = true; log(state, `${unit.name} activated.`); return state;
     }
     case 'MOVE': {
@@ -491,9 +492,8 @@ export function reduceGame(input, action) {
     case 'END_COMBAT': if(state.phase!=='combat-attack')return fail(state,'Combat may be ended after damage is assigned.');return leaveCombatWithSurvivors(state);
     case 'INTERACT': return interact(state, action);
     case 'REST': {
-      if(state.phase!=='action')return fail(state,'You cannot rest during combat.'); const wi=state.player.hand.findIndex(c=>c.id==='wound');
-      if(wi<0)return fail(state,'You have no Wound in hand to discard for a rest.'); state.player.discard.push(state.player.hand.splice(wi,1)[0]);
-      const nonWound=state.player.hand.findIndex(c=>c.id!=='wound'); if(nonWound>=0)state.player.discard.push(state.player.hand.splice(nonWound,1)[0]); log(state,'Rested: discarded a Wound and one non-Wound card.'); return endTurn(state);
+      if(state.phase!=='action')return fail(state,'You cannot rest during combat.');const nonWounds=state.player.hand.filter(card=>card.id!=='wound'),wounds=state.player.hand.filter(card=>card.id==='wound');if(!nonWounds.length&&!wounds.length)return fail(state,'There are no cards in hand to recover with.');
+      if(nonWounds.length){const chosen=nonWounds.find(card=>card.uid===action.cardUid)||nonWounds[0],woundIds=new Set(action.woundUids||wounds.map(card=>card.uid));state.player.hand=state.player.hand.filter(card=>{if(card.uid===chosen.uid||(card.id==='wound'&&woundIds.has(card.uid))){state.player.discard.push(card);return false;}return true;});log(state,`Standard rest: discarded ${chosen.name} and ${woundIds.size} Wound${woundIds.size===1?'':'s'}.`);}else{const chosen=wounds.find(card=>card.uid===action.woundUid)||wounds[0];state.player.hand=state.player.hand.filter(card=>{if(card.uid===chosen.uid){state.player.discard.push(card);return false;}return true;});log(state,'Slow recovery: discarded one Wound.');}return endTurn(state);
     }
     case 'END_TURN': if(state.phase!=='action')return fail(state,'Combat must be completed first.');if(state.pendingRewards.length)return fail(state,'Claim your pending site rewards before ending the turn.'); return endTurn(state);
     case 'END_ROUND': {
@@ -708,7 +708,7 @@ function endTurn(state,roundAnnouncement=false) {
   if(hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
   if(hex?.site==='glade'&&state.player.wounds>0){const before=state.player.hand.length+state.player.discard.length;removeWounds(state,1);if(state.player.hand.length+state.player.discard.length<before){state.player.wounds--;log(state,'The magical glade removed one Wound.');}}
   state.player.discard.push(...state.player.played); state.player.played=[]; state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value); state.mana=[]; state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;
-  state.player.units.forEach(u=>u.spent=false);state.player.skills.forEach(s=>s.used=false); const target=handLimit(state); if(state.player.hand.length<target)draw(state,target-state.player.hand.length);
+  state.player.skills.forEach(s=>s.used=false); const target=handLimit(state); if(state.player.hand.length<target)draw(state,target-state.player.hand.length);
   if(hex?.site==='glade')state.mana.push(state.time==='day'?'gold':'black');
   state.turn++;
   if(state.multiplayer){
@@ -732,7 +732,7 @@ function nextRound(state) {
   if(state.multiplayer){
     state.players.forEach((player,index)=>{bindPlayerState(state,player.id);player.deck=shuffled([...player.discard,...player.hand],state.seed+state.round+index*997);player.hand=[];player.discard=[];player.tactic=null;player.tacticUsed=false;draw(state,handLimit(state));player.units.forEach(unit=>unit.spent=false);player.skills.forEach(skill=>{skill.used=false;skill.roundUsed=false;});});
     state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=[...state.players].sort((a,b)=>a.fame-b.fame||state.players.indexOf(a)-state.players.indexOf(b)).map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];bindPlayerState(state,state.players[0].id);
-  } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];state.player.tactic=null;state.player.tacticUsed=false;draw(state,handLimit(state));state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
+  } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];state.player.tactic=null;state.player.tacticUsed=false;draw(state,handLimit(state));state.player.units.forEach(unit=>{unit.spent=false;});state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
   state.map.forEach(h=>h.used=false);const sourceCount=(state.multiplayer?state.players.length:1)+2;state.source=shuffled([...COLORS,state.time==='day'?'gold':'black',...COLORS],state.seed+state.round).slice(0,sourceCount).map((color,i)=>({id:`die-${i}`,color})); state.points=freshPoints();state.turn++;state.mana=[];state.sourceTaken=false;state.tactic=null;if(state.tacticsEnabled)state.phase='tactic';
   log(state,`${state.time==='day'?'Day':'Night'} ${Math.ceil(state.round/2)} begins.`); return state;
 }
