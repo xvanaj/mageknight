@@ -2,14 +2,24 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Peer } from 'peerjs';
 import GameComponent from '../game/GameComponent';
 import { createMultiplayerGame, gameViewForPlayer, reduceGame } from '../../gameEngine';
-import { canStartLobby, CHARACTERS, createLobby, makeGameId, SCENARIOS, updateLobby } from './lobbyState';
+import { canStartLobby, CHARACTERS, createLobby, guestLobbyAction, makeGameId, SCENARIOS, updateLobby } from './lobbyState';
 
-const playerId = () => {
-  const saved = sessionStorage.getItem('mk-player-id');
+const playerId = (gameId, isHost) => {
+  const key = `mk-player-id-${gameId || 'new'}-${isHost ? 'host' : 'guest'}`;
+  const saved = sessionStorage.getItem(key);
   if (saved) return saved;
   const id = `player-${makeGameId()}-${Date.now().toString(36)}`;
-  sessionStorage.setItem('mk-player-id', id);
+  sessionStorage.setItem(key, id);
   return id;
+};
+
+const playerToken = gameId => {
+  const key = `mk-player-token-${gameId}`;
+  const saved = sessionStorage.getItem(key);
+  if (saved) return saved;
+  const token = `${makeGameId()}${makeGameId()}-${Date.now().toString(36)}`;
+  sessionStorage.setItem(key, token);
+  return token;
 };
 
 const inviteFor = gameId => {
@@ -28,7 +38,8 @@ export default function LobbyScreen({ route, onCreate, onExit }) {
   const [copied, setCopied] = useState(false);
   const [connection, setConnection] = useState(route.isHost ? 'Opening lobby…' : 'Enter your name to join');
   const [reconnectAttempt,setReconnectAttempt]=useState(0);
-  const localId = useMemo(()=>{const id=restored?.lobby?.players?.find(player=>player.isHost)?.id||playerId();sessionStorage.setItem('mk-player-id',id);return id}, [restored]);
+  const localId = useMemo(()=>restored?.lobby?.players?.find(player=>player.isHost)?.id||playerId(route.gameId,route.isHost), [restored,route.gameId,route.isHost]);
+  const authToken = useMemo(()=>route.gameId?playerToken(route.gameId):'', [route.gameId]);
   const [lobby, setLobby] = useState(() => restored?.lobby||(route.isHost ? createLobby(route.gameId, { id: localId, name: name.trim() || 'Host' }) : null));
   const [gameState,setGameState]=useState(()=>restored?.game||null);
   const peerRef = useRef(null);
@@ -36,24 +47,42 @@ export default function LobbyScreen({ route, onCreate, onExit }) {
   const connectionsRef = useRef(new Map());
   const channelRef = useRef(null);
   const gameRef=useRef(null);
+  const lobbyRef=useRef(lobby);
+  const authTokensRef=useRef(new Map(Object.entries(restored?.authTokens||{})));
 
   const applyHostAction = useCallback(action => setLobby(current => updateLobby(current, action)), []);
+  const authenticateJoin = useCallback((message, dataConnection) => {
+    const candidate=message?.action?.player,token=message?.authToken;
+    const cleanName=typeof candidate?.name==='string'?candidate.name.trim().slice(0,24):'';
+    if(!candidate?.id||!cleanName||!token)return false;
+    const existing=lobbyRef.current?.players.find(player=>player.id===candidate.id);
+    const knownToken=authTokensRef.current.get(candidate.id);
+    if(existing?.isHost||(knownToken&&knownToken!==token)||(!existing&&(lobbyRef.current?.players.length||0)>=4))return false;
+    authTokensRef.current.set(candidate.id,token);
+    if(dataConnection){dataConnection.playerId=candidate.id;dataConnection.authToken=token;}
+    applyHostAction({type:'JOIN',player:{id:candidate.id,name:cleanName}});
+    return true;
+  }, [applyHostAction]);
   const leave=()=>{if(route.isHost&&route.gameId)localStorage.removeItem(`mk-host-session-${route.gameId}`);onExit?.()};
 
-  useEffect(()=>{if(route.isHost&&route.gameId&&lobby)localStorage.setItem(`mk-host-session-${route.gameId}`,JSON.stringify({lobby,game:gameState}));},[route.isHost,route.gameId,lobby,gameState]);
+  useEffect(()=>{lobbyRef.current=lobby},[lobby]);
+  useEffect(()=>{if(route.isHost&&route.gameId&&lobby)localStorage.setItem(`mk-host-session-${route.gameId}`,JSON.stringify({lobby,game:gameState,authTokens:Object.fromEntries(authTokensRef.current)}));},[route.isHost,route.gameId,lobby,gameState]);
 
   useEffect(() => {
     if (!route.gameId) return undefined;
     const channel = process.env.NODE_ENV !== 'test' && typeof BroadcastChannel === 'function' ? new BroadcastChannel(`mk-lobby-${route.gameId}`) : null;
     channelRef.current = channel;
     if (channel) channel.onmessage = event => {
-      if (route.isHost && event.data?.kind === 'action') applyHostAction(event.data.action);
+      if (route.isHost && event.data?.kind === 'action') {
+        if(event.data.action?.type==='JOIN')authenticateJoin(event.data);
+        else if(authTokensRef.current.get(event.data.playerId)===event.data.authToken){const action=guestLobbyAction(event.data.action,event.data.playerId);if(action)applyHostAction(action);}
+      }
       if (!route.isHost && event.data?.kind === 'state') setLobby(event.data.lobby);
-      if(route.isHost&&event.data?.kind==='game-action')setGameState(current=>reduceGame(current,{...event.data.action,playerId:event.data.playerId}));
+      if(route.isHost&&event.data?.kind==='game-action'&&authTokensRef.current.get(event.data.playerId)===event.data.authToken)setGameState(current=>reduceGame(current,{...event.data.action,playerId:event.data.playerId}));
       if(!route.isHost&&event.data?.kind==='game-state'&&event.data.targetId===localId)setGameState(event.data.game);
     };
     return () => channel?.close();
-  }, [route.gameId, route.isHost, localId, applyHostAction]);
+  }, [route.gameId, route.isHost, localId, applyHostAction, authenticateJoin]);
 
   useEffect(() => {
     if (!route.gameId || process.env.NODE_ENV === 'test') {
@@ -67,10 +96,13 @@ export default function LobbyScreen({ route, onCreate, onExit }) {
     const bindHostConnection = dataConnection => {
       dataConnection.on('data', message => {
         if(message?.kind==='action'){
-          if (message.action?.type === 'JOIN') {dataConnection.playerId = message.action.player.id;if(gameRef.current)dataConnection.send({kind:'game-state',game:gameViewForPlayer(gameRef.current,dataConnection.playerId)});}
-          applyHostAction(message.action);return;
+          if(message.action?.type==='JOIN'){
+            if(authenticateJoin(message,dataConnection)){if(gameRef.current)dataConnection.send({kind:'game-state',game:gameViewForPlayer(gameRef.current,dataConnection.playerId)});}
+            else dataConnection.send({kind:'join-rejected'});
+          }else if(dataConnection.playerId&&dataConnection.authToken===message.authToken){const action=guestLobbyAction(message.action,dataConnection.playerId);if(action)applyHostAction(action);}
+          return;
         }
-        if(message?.kind==='game-action'&&dataConnection.playerId===message.playerId)setGameState(current=>reduceGame(current,{...message.action,playerId:message.playerId}));
+        if(message?.kind==='game-action'&&dataConnection.playerId&&dataConnection.authToken===message.authToken)setGameState(current=>reduceGame(current,{...message.action,playerId:dataConnection.playerId}));
       });
       dataConnection.on('open', () => connections.set(dataConnection.peer, dataConnection));
       dataConnection.on('close', () => {
@@ -87,16 +119,16 @@ export default function LobbyScreen({ route, onCreate, onExit }) {
         hostConnectionRef.current = dataConnection;
         dataConnection.on('open', () => {
           setConnection('Connected to host');
-          if (joined) dataConnection.send({ kind: 'action', action: { type: 'JOIN', player: { id: localId, name: name.trim() || 'Player' } } });
+          if (joined) dataConnection.send({ kind: 'action', playerId:localId,authToken,action: { type: 'JOIN', player: { id: localId, name: name.trim() || 'Player' } } });
         });
-        dataConnection.on('data', message => { if (message?.kind === 'state') setLobby(message.lobby);if(message?.kind==='game-state')setGameState(message.game); });
+        dataConnection.on('data', message => { if (message?.kind === 'state') setLobby(message.lobby);if(message?.kind==='game-state')setGameState(message.game);if(message?.kind==='join-rejected')setConnection('Join rejected · this player identity is already in use'); });
         dataConnection.on('close', () => {setConnection('Host disconnected · reconnecting…');if(!disposed)reconnectTimer=setTimeout(()=>setReconnectAttempt(value=>value+1),2000)});
         dataConnection.on('error', () => setConnection('Could not connect to host'));
       });
     }
     peer.on('error', error => setConnection(error.type === 'unavailable-id' ? 'This lobby is already open in another host window' : 'Peer connection unavailable'));
     return () => { disposed=true;clearTimeout(reconnectTimer);peer.destroy(); peerRef.current = null; connections.clear(); };
-  }, [route.gameId, route.isHost, joined, localId, name, reconnectAttempt, applyHostAction]);
+  }, [route.gameId, route.isHost, joined, localId, name, reconnectAttempt, applyHostAction, authenticateJoin, authToken]);
 
   useEffect(() => {
     if (!route.isHost || !lobby) return;
@@ -118,14 +150,14 @@ export default function LobbyScreen({ route, onCreate, onExit }) {
   const sendAction = action => {
     if (route.isHost) applyHostAction(action);
     else {
-      if(hostConnectionRef.current?.open)hostConnectionRef.current.send({ kind: 'action', action });
-      else channelRef.current?.postMessage({ kind: 'action', action });
+      if(hostConnectionRef.current?.open)hostConnectionRef.current.send({ kind: 'action',playerId:localId,authToken,action });
+      else channelRef.current?.postMessage({ kind: 'action',playerId:localId,authToken,action });
     }
   };
 
   const sendGameAction=action=>{
     if(route.isHost)setGameState(current=>reduceGame(current,{...action,playerId:localId}));
-    else {if(hostConnectionRef.current?.open)hostConnectionRef.current.send({kind:'game-action',playerId:localId,action});else channelRef.current?.postMessage({kind:'game-action',playerId:localId,action});}
+    else {if(hostConnectionRef.current?.open)hostConnectionRef.current.send({kind:'game-action',playerId:localId,authToken,action});else channelRef.current?.postMessage({kind:'game-action',playerId:localId,authToken,action});}
   };
 
   const join = event => {
@@ -136,8 +168,8 @@ export default function LobbyScreen({ route, onCreate, onExit }) {
     setJoined(true);
     setConnection('Connecting to host…');
     const action = { type: 'JOIN', player: { id: localId, name: cleanName } };
-    if(hostConnectionRef.current?.open)hostConnectionRef.current.send({ kind: 'action', action });
-    else channelRef.current?.postMessage({ kind: 'action', action });
+    if(hostConnectionRef.current?.open)hostConnectionRef.current.send({ kind: 'action',playerId:localId,authToken,action });
+    else channelRef.current?.postMessage({ kind: 'action',playerId:localId,authToken,action });
   };
 
   if (!route.gameId) return <NewGamePanel name={name} setName={setName} onCreate={onCreate} />;

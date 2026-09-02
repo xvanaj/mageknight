@@ -21,12 +21,12 @@ function GameComponent({session,onLeaveGame,multiplayerGame,onGameAction,network
   const [challengeIds,setChallengeIds]=useState([]);
   const dispatch = action => onGameAction?onGameAction(action):setLocalGame(old => reduceGame(old, action));
   const moves = useMemo(() => new Map(legalMoves(game).map(h=>[`${h.q},${h.r}`,h])),[game]);
-  const explorations=useMemo(()=>new Map(legalExplorations(game).map(item=>[item.tileId,item])),[game]);
+  const explorations=useMemo(()=>new Map(legalExplorations(game).map(item=>[`${item.q},${item.r}`,item])),[game]);
   const here=game.map.find(h=>h.q===game.player.q&&h.r===game.player.r);
   const save=()=>{if(game.multiplayer)return;localStorage.setItem('mage-knight-save',JSON.stringify(game)); setLocalGame(g=>({...g,error:null,log:[{turn:g.turn,round:g.round,message:'Game saved in this browser.'},...g.log]}));};
   const fresh=()=>{if(session){onLeaveGame?.();return}if(window.confirm('Start a new Solo Conquest? Your current position will be replaced.')){localStorage.removeItem('mage-knight-save');setLocalGame(createGame(Date.now()));}};
   const play=(uid,mode,as,choices={})=>{dispatch({type:'PLAY_CARD',uid,mode,as,...choices});setSideways(null);};
-  const hexClick=hex=>{if(hex.revealed===false){const explore=explorations.get(hex.tileId);if(explore?.legal)dispatch({type:'EXPLORE',tileId:hex.tileId});return;}const move=moves.get(`${hex.q},${hex.r}`);if(move?.legal)dispatch({type:'MOVE',q:hex.q,r:hex.r});};
+  const hexClick=hex=>{if(hex.revealed===false){const explore=explorations.get(`${hex.q},${hex.r}`);if(explore?.legal)dispatch({type:'EXPLORE',q:hex.q,r:hex.r});return;}const move=moves.get(`${hex.q},${hex.r}`);if(move?.legal)dispatch({type:'MOVE',q:hex.q,r:hex.r});};
   const combat=game.combat?.enemy;
 
   const interactiveRemote=['team-assault','pvp-attend','pvp-ranged','pvp-melee','pvp-withdraw'].includes(game.phase);

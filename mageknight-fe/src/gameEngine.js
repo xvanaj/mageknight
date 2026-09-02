@@ -247,7 +247,7 @@ export function gameViewForPlayer(input,playerId){
   if(!input)return null;const state=migrateState(clone(input));if(!state.multiplayer)return state;
   const own=bindPlayerState(state,playerId);if(!own)return null;
   state.viewerPlayerId=playerId;state.players=state.players.map(player=>player.id===playerId?player:{...player,handCount:player.hand.length,deckCount:player.deck.length,discardCount:player.discard.length,hand:[],deck:[],discard:[],played:[]});
-  state.player=state.players.find(player=>player.id===playerId);if(playerId!==state.activePlayerId)state.points=freshPoints();delete state.playerResources;return state;
+  state.player=state.players.find(player=>player.id===playerId);if(playerId!==state.activePlayerId)state.points=freshPoints();state.map=state.map.map(hex=>hex.revealed===false?{q:hex.q,r:hex.r,s:hex.s,core:hex.core,revealed:false}:hex);state.hiddenDeckCounts=Object.fromEntries(Object.entries(state.decks||{}).map(([name,cards])=>[name,cards.length]));state.hiddenEnemyCounts=Object.fromEntries(Object.entries(state.enemyDecks||{}).map(([name,cards])=>[name,cards.length]));state.tileDeckCount=state.tileDeck?.length||0;state.skillDeckCount=state.skillDeck?.length||0;state.decks={};state.enemyDecks={};state.tileDeck=[];state.skillDeck=[];delete state.playerResources;return state;
 }
 
 function freshPoints() { return { move: 0, influence: 0, heal: 0, attack: 0, block: 0, ranged: 0, siege: 0, iceAttack:0, fireAttack:0, iceBlock:0, fireBlock:0 }; }
@@ -310,7 +310,7 @@ const provokingEnemies=(state,destination)=>state.map.filter(hex=>hex.revealed!=
 
 export function legalExplorations(state){
   if(!state.explorationEnabled||state.phase!=='action'||state.player.turnAction)return [];
-  const ids=new Set();return state.map.filter(hex=>hex.revealed===false&&distance(state.player,hex)===1&&!ids.has(hex.tileId)&&ids.add(hex.tileId)).map(hex=>({tileId:hex.tileId,q:hex.q,r:hex.r,cost:2,legal:state.points.move>=2}));
+  const ids=new Set();return state.map.filter(hex=>hex.revealed===false&&distance(state.player,hex)===1&&(!hex.tileId||(!ids.has(hex.tileId)&&ids.add(hex.tileId)))).map(hex=>({...hex.tileId&&{tileId:hex.tileId},q:hex.q,r:hex.r,cost:2,legal:state.points.move>=2}));
 }
 
 export function calculateScore(state){
@@ -418,7 +418,7 @@ export function reduceGame(input, action) {
     }
     case 'EXPLORE': {
       if(!state.explorationEnabled||state.phase!=='action')return fail(state,'Exploration is not available now.');if(state.player.turnAction)return fail(state,'Exploration must happen before your turn action.');
-      const target=state.map.find(hex=>hex.tileId===action.tileId&&hex.revealed===false&&distance(state.player,hex)===1);if(!target)return fail(state,'That tile is not adjacent to your position.');
+      const target=state.map.find(hex=>(action.tileId?hex.tileId===action.tileId:(hex.q===action.q&&hex.r===action.r))&&hex.revealed===false&&distance(state.player,hex)===1);if(!target)return fail(state,'That tile is not adjacent to your position.');
       if(state.points.move<2)return fail(state,'Exploration requires 2 Move.');
       const tile=MAP_TILES.find(item=>item.id===target.tileId);const wildernessRemaining=state.map.some(hex=>hex.revealed===false&&!hex.core);
       if(tile?.core&&wildernessRemaining)return fail(state,'Reveal all countryside tiles before a core tile.');

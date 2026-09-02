@@ -51,6 +51,13 @@ export function updateLobby(lobby, action) {
 
 export const canStartLobby = lobby => Boolean(lobby && lobby.players.length >= 1 && lobby.players.every(player => player.connected && player.character && player.ready));
 
+const GUEST_ACTIONS = new Set(['SELECT_CHARACTER', 'SET_READY', 'LEAVE']);
+
+export function guestLobbyAction(action, playerId) {
+  if (!action || !playerId || !GUEST_ACTIONS.has(action.type)) return null;
+  return { ...action, playerId };
+}
+
 export function makeGameId() {
   const bytes = new Uint8Array(5);
   if (typeof window !== 'undefined' && window.crypto?.getRandomValues) window.crypto.getRandomValues(bytes);
