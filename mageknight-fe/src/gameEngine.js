@@ -131,6 +131,11 @@ const ARTIFACT_CARDS = [
 ];
 
 export const CONTENT_COUNTS={advancedActions:ADVANCED_CARDS.length,spells:SPELL_CARDS.length,artifacts:ARTIFACT_CARDS.length,units:UNITS.length,characters:Object.keys(CHARACTER_PROFILES).length};
+export const SCENARIO_TILE_COUNTS={
+  'full-conquest':{1:{countryside:7,city:2,nonCity:2},2:{countryside:8,city:2,nonCity:1},3:{countryside:9,city:3,nonCity:2},4:{countryside:11,city:4,nonCity:3}},
+  'blitz-conquest':{1:{countryside:6,city:2,nonCity:1},2:{countryside:6,city:2,nonCity:1},3:{countryside:7,city:3,nonCity:2},4:{countryside:9,city:4,nonCity:3}},
+  'cooperative-conquest':{1:{countryside:7,city:2,nonCity:2},2:{countryside:8,city:3,nonCity:2},3:{countryside:10,city:4,nonCity:3}},
+};
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const isBanner=card=>card?.type==='artifact'&&card.id?.startsWith('banner-');
@@ -176,10 +181,11 @@ const connectedTileOrder=(tiles,revealedRows,seed)=>{
   while(remaining.length){const index=remaining.findIndex(tile=>tile.hexes.some(row=>revealedRows.some(revealed=>tileRowDistance(row,revealed)===1)));if(index<0){ordered.push(...remaining.splice(0));break;}const [tile]=remaining.splice(index,1);ordered.push(tile);revealedRows.push(...tile.hexes);}
   return ordered;
 };
-const buildTileDeck=(seed,startingTileIds=[])=>{
-  const starting=new Set(startingTileIds),revealedRows=[[0,0],...MAP_TILES.filter(tile=>starting.has(tile.id)).flatMap(tile=>tile.hexes)],countryside=connectedTileOrder(MAP_TILES.filter(tile=>!tile.core&&!starting.has(tile.id)),revealedRows,seed+23),core=connectedTileOrder(MAP_TILES.filter(tile=>tile.core&&!starting.has(tile.id)),revealedRows,seed+29);
+const buildTileDeck=(seed,startingTileIds=[],selectedTileIds=MAP_TILES.map(tile=>tile.id))=>{
+  const selected=new Set(selectedTileIds),starting=new Set(startingTileIds),revealedRows=[[0,0],...MAP_TILES.filter(tile=>selected.has(tile.id)&&starting.has(tile.id)).flatMap(tile=>tile.hexes)],countryside=connectedTileOrder(MAP_TILES.filter(tile=>selected.has(tile.id)&&!tile.core&&!starting.has(tile.id)),revealedRows,seed+23),core=connectedTileOrder(MAP_TILES.filter(tile=>selected.has(tile.id)&&tile.core&&!starting.has(tile.id)),revealedRows,seed+29);
   return [...countryside,...core].map(tile=>tile.id);
 };
+const scenarioTileIds=(scenario,playerCount)=>{const setup=SCENARIO_TILE_COUNTS[scenario]?.[playerCount]||SCENARIO_TILE_COUNTS['full-conquest'][Math.min(4,Math.max(1,playerCount))],countryside=MAP_TILES.filter(tile=>!tile.core).slice(0,setup.countryside),cities=MAP_TILES.filter(tile=>tile.core&&tile.cityCore).slice(0,setup.city),nonCities=MAP_TILES.filter(tile=>tile.core&&!tile.cityCore).slice(0,setup.nonCity);return [...countryside,...cities,...nonCities].map(tile=>tile.id);};
 const rollSource=(count,time,seed)=>{const faces=[...COLORS,'gold','black',...COLORS],colors=shuffled(faces,seed+(time==='night'?97:0)).slice(0,count),required=Math.ceil(count/2);let basics=colors.filter(color=>COLORS.includes(color)).length;for(let index=0;index<colors.length&&basics<required;index++)if(!COLORS.includes(colors[index])){colors[index]=COLORS[(seed+index*17)%COLORS.length];basics++;}return colors.map((color,index)=>({id:`die-${index}`,color,used:false}));};
 const log = (state, message) => { state.log.unshift({ turn: state.turn, round: state.round, message }); state.log = state.log.slice(0, 80); };
 const fail = (state, error) => ({ ...state, error });
@@ -198,9 +204,10 @@ const handLimit = state => {
   return printedLimit+Math.max(nearOwnedKeep?(state.player.keeps||0):0,cityBonus)+planning;
 };
 
-const prepareMap=exploration=>{
+const prepareMap=(exploration,selectedTileIds=MAP_TILES.map(tile=>tile.id))=>{
+  const selected=new Set(selectedTileIds);
   const portal={q:0,r:0,s:0,terrain:'plains',site:'portal',enemy:null,enemies:[],tileId:'portal',core:false,enemyCategory:null,enemyFaceDown:false,revealed:true};
-  const hexes=MAP_TILES.flatMap(tile=>tile.hexes.map(row=>{const [q,r,terrain,site=null,enemyId=null,cityColor=null]=row,category=site==='rampaging'?'orc':site==='draconum'?'dragon':site==='keep'?'grey':site==='mage-tower'?'violet':['dungeon','monster-den','spawning-grounds'].includes(site)?'brown':site==='tomb'?'red':null,baseEnemy=enemyId?clone(ENEMIES[enemyId]):null,enemy=baseEnemy?{...baseEnemy,category,uid:`${q}:${r}:${enemyId}`}:null;return {q,r,s:-q-r,terrain,site,mineColor:site==='mine'?COLORS[(Math.abs(q)+Math.abs(r))%4]:undefined,enemy,enemies:enemy?[clone(enemy)]:[],cityColor,tileId:tile.id,core:Boolean(tile.core),enemyCategory:category,enemyFaceDown:['keep','mage-tower','city'].includes(site)&&Boolean(enemy),conquered:false,burned:false,used:false,revealed:!exploration};}));
+  const hexes=MAP_TILES.filter(tile=>selected.has(tile.id)).flatMap(tile=>tile.hexes.map(row=>{const [q,r,terrain,site=null,enemyId=null,cityColor=null]=row,category=site==='rampaging'?'orc':site==='draconum'?'dragon':site==='keep'?'grey':site==='mage-tower'?'violet':['dungeon','monster-den','spawning-grounds'].includes(site)?'brown':site==='tomb'?'red':null,baseEnemy=enemyId?clone(ENEMIES[enemyId]):null,enemy=baseEnemy?{...baseEnemy,category,uid:`${q}:${r}:${enemyId}`}:null;return {q,r,s:-q-r,terrain,site,mineColor:site==='mine'?COLORS[(Math.abs(q)+Math.abs(r))%4]:undefined,enemy,enemies:enemy?[clone(enemy)]:[],cityColor,tileId:tile.id,core:Boolean(tile.core),enemyCategory:category,enemyFaceDown:['keep','mage-tower','city'].includes(site)&&Boolean(enemy),conquered:false,burned:false,used:false,revealed:!exploration};}));
   return [portal,...hexes];
 };
 
@@ -224,7 +231,7 @@ export function createGame(seed = 20260901, options = {}) {
   const advancedPool=shuffled(clone(ADVANCED_CARDS),seed+41),spellPool=shuffled(clone(SPELL_CARDS.filter(card=>!options.removeCompetitive||!card.competitive)),seed+51),regularUnits=shuffled(clone(UNITS.filter(unit=>!unit.elite)),seed+61),eliteUnits=shuffled(clone(UNITS.filter(unit=>unit.elite)),seed+62);
   const state = {
     version:5, seed, scenario: 'Solo Conquest', status: 'playing', round: 1, maxRounds:6, time: 'day', turn: 1, phase: options.tactics ? 'tactic' : 'action', tacticsEnabled:Boolean(options.tactics), tactic:null,
-    map:prepareMap(Boolean(options.exploration)), tileDeck:buildTileDeck(seed), exploredTiles:[], enemyDecks:createEnemyDecks(seed),enemyDiscards:Object.fromEntries(Object.keys(ENEMY_POOLS).map(category=>[category,[]])),explorationEnabled:Boolean(options.exploration), source,
+    map:prepareMap(Boolean(options.exploration),options.tileIds), tileDeck:buildTileDeck(seed,[],options.tileIds), exploredTiles:[], enemyDecks:createEnemyDecks(seed),enemyDiscards:Object.fromEntries(Object.keys(ENEMY_POOLS).map(category=>[category,[]])),explorationEnabled:Boolean(options.exploration), source,
     offer: { units:regularUnits.splice(0,3),advanced:advancedPool.splice(0,3),spells:spellPool.splice(0,3),monastery:[] },
     decks: { artifacts:shuffled(clone(ARTIFACT_CARDS),seed+31),advanced:advancedPool,spells:spellPool,regularUnits,eliteUnits },
     player:makePlayer(seed,character),
@@ -242,17 +249,17 @@ export function createGame(seed = 20260901, options = {}) {
 }
 
 export function createMultiplayerGame(lobby, seed = 20260901) {
-  const peaceful=lobby.players.length===1||lobby.scenario==='cooperative-conquest';
-  const state = createGame(seed, { tactics:true,exploration:true,removeCompetitive:peaceful });
+  const playerCount=lobby.players.length,peaceful=playerCount===1||lobby.scenario==='cooperative-conquest',selectedTileIds=scenarioTileIds(lobby.scenario,playerCount);
+  const state = createGame(seed, { tactics:true,exploration:true,removeCompetitive:peaceful,tileIds:selectedTileIds });
   const characterNames = {tovak:'Tovak',arythea:'Arythea',goldyx:'Goldyx',norowas:'Norowas',wolfhawk:'Wolfhawk',krang:'Krang',braevalar:'Braevalar'};
   const individualGames = lobby.players.map((member,index)=>createGame(seed+index*997,{character:member.character}));
   state.version=5;state.multiplayer=true;state.scenario=lobby.scenario;state.maxRounds=lobby.scenario==='blitz-conquest'?4:6;state.phase='tactic';state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=[...lobby.players].reverse().map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];
   state.players=lobby.players.map((member,index)=>({...individualGames[index].player,id:member.id,playerName:member.name,character:member.character,name:characterNames[member.character]||member.name,connected:true,tactic:null}));
   if(lobby.scenario==='blitz-conquest')state.players.forEach(player=>{player.fame=1;player.reputation=2;});
   const extra=lobby.scenario==='blitz-conquest'?1:0;state.source=rollSource(lobby.players.length+2+extra,'day',seed+9);
-  const playerCount=lobby.players.length,cityLevels=lobby.scenario==='cooperative-conquest'?(playerCount===1?[5,8]:playerCount===2?[5,5,8]:[5,5,5,11]):lobby.scenario==='blitz-conquest'?Array.from({length:Math.max(2,playerCount)},()=>3):playerCount===1?[5,8]:Array.from({length:playerCount},()=>4),allCities=shuffled(state.map.filter(hex=>hex.site==='city'),seed+211),activeCities=allCities.slice(0,cityLevels.length),activeSet=new Set(activeCities.map(hex=>`${hex.q}:${hex.r}`));allCities.filter(hex=>!activeSet.has(`${hex.q}:${hex.r}`)).forEach(hex=>{hex.site=null;hex.cityColor=null;hex.enemy=null;hex.enemies=[];hex.enemyFaceDown=false;});
+  const cityLevels=lobby.scenario==='cooperative-conquest'?(playerCount===1?[5,8]:playerCount===2?[5,5,8]:[5,5,5,11]):lobby.scenario==='blitz-conquest'?Array.from({length:Math.max(2,playerCount)},()=>3):playerCount===1?[5,8]:Array.from({length:playerCount},()=>4),allCities=shuffled(state.map.filter(hex=>hex.site==='city'),seed+211),activeCities=allCities.slice(0,cityLevels.length),activeSet=new Set(activeCities.map(hex=>`${hex.q}:${hex.r}`));allCities.filter(hex=>!activeSet.has(`${hex.q}:${hex.r}`)).forEach(hex=>{hex.site=null;hex.cityColor=null;hex.enemy=null;hex.enemies=[];hex.enemyFaceDown=false;});
   activeCities.forEach((hex,index)=>{hex.level=cityLevels[index];hex.finalCity=index===cityLevels.length-1&&new Set(cityLevels).size>1;const count=Math.ceil(hex.level/3)+1;hex.enemies=Array.from({length:count},(_,slot)=>{const token=drawEnemyToken(state,'white')||{...clone(ENEMIES.city),category:'white'};return {...token,uid:`city-${index}-${slot}:${token.uid||token.id}`};});hex.enemy=enemyGroup(hex.enemies);hex.enemyFaceDown=true;});const spawning=state.map.find(hex=>hex.site==='spawning-grounds');if(spawning){spawning.enemies=[{...clone(ENEMIES.den),uid:'spawn-den'},{...clone(ENEMIES.golem),uid:'spawn-golem'}];spawning.enemy=enemyGroup(spawning.enemies);}
-  const startingTileIds=['countryside-a','countryside-b',...(lobby.scenario==='cooperative-conquest'||playerCount>=4?['countryside-c']:[])];for(const tileId of startingTileIds){state.map.filter(hex=>hex.tileId===tileId).forEach(hex=>{hex.revealed=true;});revealEnemyTokens(state,tileId);}state.exploredTiles.push(...startingTileIds);state.tileDeck=buildTileDeck(seed,startingTileIds);revealVisibleGarrisons(state);const visibleMonasteries=state.map.filter(hex=>hex.revealed!==false&&hex.site==='monastery'&&!hex.burned).length;while(state.offer.monastery.length<visibleMonasteries&&state.decks.advanced.length)state.offer.monastery.push(state.decks.advanced.shift());
+  const startingTileIds=['countryside-a','countryside-b',...(lobby.scenario==='cooperative-conquest'||playerCount>=4?['countryside-c']:[])];for(const tileId of startingTileIds){state.map.filter(hex=>hex.tileId===tileId).forEach(hex=>{hex.revealed=true;});revealEnemyTokens(state,tileId);}state.exploredTiles.push(...startingTileIds);state.tileDeck=buildTileDeck(seed,startingTileIds,selectedTileIds);revealVisibleGarrisons(state);const visibleMonasteries=state.map.filter(hex=>hex.revealed!==false&&hex.site==='monastery'&&!hex.burned).length;while(state.offer.monastery.length<visibleMonasteries&&state.decks.advanced.length)state.offer.monastery.push(state.decks.advanced.shift());
   while(state.offer.units.length<lobby.players.length+2+extra&&state.decks.regularUnits.length)state.offer.units.push(state.decks.regularUnits.shift());
   state.playerResources=Object.fromEntries(lobby.players.map((member,index)=>[member.id,{skillDeck:individualGames[index].skillDeck,skillChoices:[],bonuses:{sideways:null,manaOverload:null},pendingRewards:[]}]))
   if(peaceful){const unused=Object.keys(CHARACTER_PROFILES).filter(id=>!lobby.players.some(player=>player.character===id)),character=unused[seed%unused.length]||'goldyx',dummyPlayer=makePlayer(seed+7001,character),crystalRows={tovak:['blue','blue','white'],arythea:['red','red','green'],goldyx:['green','green','blue'],norowas:['white','white','green'],wolfhawk:['white','red','green'],krang:['red','blue','green'],braevalar:['green','blue','white']};state.dummy={id:'dummy',character,name:`${CHARACTER_PROFILES[character]?.name||character} dummy`,deck:shuffled([...dummyPlayer.hand,...dummyPlayer.deck],seed+7002),discard:[],crystals:Object.fromEntries(COLORS.map(color=>[color,(crystalRows[character]||[]).filter(item=>item===color).length])),skillDeck:shuffled(clone(CHARACTER_PROFILES[character]?.skills||[]),seed+7003),tactic:null};if(lobby.players.length>1)selectDummyTactic(state);}
