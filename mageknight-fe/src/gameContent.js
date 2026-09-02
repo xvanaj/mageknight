@@ -107,7 +107,7 @@ export const EXTENDED_ACTIONS = [
   {id:'intimidate',name:'Intimidate',color:'red',type:'advanced',basic:{options:[{id:'influence',label:'Influence 4; Reputation -1',effect:{influence:4,reputation:-1}},{id:'attack',label:'Attack 3; Reputation -1',effect:{attack:3,reputation:-1}}]},strong:{options:[{id:'influence',label:'Influence 8; Reputation -2',effect:{influence:8,reputation:-2}},{id:'attack',label:'Attack 7; Reputation -2',effect:{attack:7,reputation:-2}}]}},
   {id:'into-the-heat',name:'Into the Heat',color:'red',type:'advanced',basic:{attack:4},strong:{attack:7}},
   {id:'learning',name:'Learning',color:'blue',type:'advanced',basic:{draw:1},strong:{draw:3}},
-  {id:'mana-storm',name:'Mana Storm',color:'white',type:'advanced',basic:{mana:'token'},strong:{mana:'crystal'}},
+  {id:'mana-storm',name:'Mana Storm',color:'white',type:'advanced',basic:{manaStorm:'crystal-and-reroll'},strong:{manaStorm:'reroll-and-use-three'}},
   {id:'maximal-effect',name:'Maximal Effect',color:'red',type:'advanced',basic:{any:2},strong:{any:5}},
   {id:'regeneration',name:'Regeneration',color:'green',type:'advanced',basic:{heal:1,unitReady:1,maxUnitLevel:2},strong:{heal:2,unitReady:1,maxUnitLevel:3}},
   {id:'song-of-wind',name:'Song of Wind',color:'white',type:'advanced',basic:{move:2,movementRule:{reduction:{plains:1,desert:1,wasteland:1}}},strong:{options:[{id:'wind',label:'Move 2; plains, desert, and wasteland cost 2 less',effect:{move:2,movementRule:{reduction:{plains:2,desert:2,wasteland:2}}}},{id:'lake',label:'Also pay blue: lakes cost 0',effect:{move:2,additionalMana:'blue',movementRule:{reduction:{plains:2,desert:2,wasteland:2},replace:{lake:0}}}}]}},
