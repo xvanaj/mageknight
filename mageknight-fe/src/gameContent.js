@@ -108,7 +108,7 @@ export const EXTENDED_ACTIONS = [
   {id:'into-the-heat',name:'Into the Heat',color:'red',type:'advanced',basic:{unitCombatBonus:{attack:2,block:2},unitsCannotAbsorbDamage:true},strong:{unitCombatBonus:{attack:3,block:3},unitsCannotAbsorbDamage:true}},
   {id:'learning',name:'Learning',color:'white',type:'advanced',basic:{influence:2,learning:{cost:6,destination:'discard'}},strong:{influence:4,learning:{cost:9,destination:'hand'}}},
   {id:'mana-storm',name:'Mana Storm',color:'white',type:'advanced',basic:{manaStorm:'crystal-and-reroll'},strong:{manaStorm:'reroll-and-use-three'}},
-  {id:'maximal-effect',name:'Maximal Effect',color:'red',type:'advanced',basic:{any:2},strong:{any:5}},
+  {id:'maximal-effect',name:'Maximal Effect',color:'red',type:'advanced',basic:{maximalEffect:'basic'},strong:{maximalEffect:'strong'}},
   {id:'regeneration',name:'Regeneration',color:'green',type:'advanced',basic:{heal:1,unitReady:1,maxUnitLevel:2},strong:{heal:2,unitReady:1,maxUnitLevel:3}},
   {id:'song-of-wind',name:'Song of Wind',color:'white',type:'advanced',basic:{move:2,movementRule:{reduction:{plains:1,desert:1,wasteland:1}}},strong:{options:[{id:'wind',label:'Move 2; plains, desert, and wasteland cost 2 less',effect:{move:2,movementRule:{reduction:{plains:2,desert:2,wasteland:2}}}},{id:'lake',label:'Also pay blue: lakes cost 0',effect:{move:2,additionalMana:'blue',movementRule:{reduction:{plains:2,desert:2,wasteland:2},replace:{lake:0}}}}]}},
   {id:'swift-bolt',name:'Swift Bolt',color:'white',type:'advanced',basic:{gainCrystalColor:'white'},strong:{ranged:4}},
