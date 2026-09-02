@@ -97,7 +97,7 @@ export const EXTENDED_UNITS = [
 export const EXTENDED_ACTIONS = [
   {id:'crushing-bolt',name:'Crushing Bolt',color:'green',type:'advanced',basic:{gainCrystalColor:'green'},strong:{siege:3}},
   {id:'ice-shield',name:'Ice Shield',color:'blue',type:'advanced',basic:{iceBlock:3},strong:{iceBlock:3,armorChange:{amount:-3,minimum:1,exclude:'ice-resistant'}}},
-  {id:'ambush',name:'Ambush',color:'green',type:'advanced',basic:{move:2,attack:2},strong:{move:4,attack:4}},
+  {id:'ambush',name:'Ambush',color:'green',type:'advanced',basic:{move:2,attackBlockCardBonus:{attack:1,block:2}},strong:{move:4,attackBlockCardBonus:{attack:2,block:4}}},
   {id:'heroic-tale',name:'Heroic Tale',color:'white',type:'advanced',basic:{influence:4},strong:{influence:6,fame:1}},
   {id:'refreshing-walk-aa',name:'Refreshing Walk',color:'green',type:'advanced',basic:{move:2,healOutsideCombat:1},strong:{move:4,healOutsideCombat:2}},
   {id:'blood-of-ancients',name:'Blood of Ancients',color:'red',type:'advanced',basic:{attack:3,draw:1},strong:{attack:7,woundCost:1}},
@@ -105,7 +105,7 @@ export const EXTENDED_ACTIONS = [
   {id:'frost-bridge',name:'Frost Bridge',color:'blue',type:'advanced',basic:{move:2,movementRule:{replace:{swamp:1}}},strong:{move:4,movementRule:{replace:{swamp:1,lake:1}}}},
   {id:'ice-bolt',name:'Ice Bolt',color:'blue',type:'advanced',basic:{gainCrystalColor:'blue'},strong:{iceRanged:3}},
   {id:'intimidate',name:'Intimidate',color:'red',type:'advanced',basic:{options:[{id:'influence',label:'Influence 4; Reputation -1',effect:{influence:4,reputation:-1}},{id:'attack',label:'Attack 3; Reputation -1',effect:{attack:3,reputation:-1}}]},strong:{options:[{id:'influence',label:'Influence 8; Reputation -2',effect:{influence:8,reputation:-2}},{id:'attack',label:'Attack 7; Reputation -2',effect:{attack:7,reputation:-2}}]}},
-  {id:'into-the-heat',name:'Into the Heat',color:'red',type:'advanced',basic:{attack:4},strong:{attack:7}},
+  {id:'into-the-heat',name:'Into the Heat',color:'red',type:'advanced',basic:{unitCombatBonus:{attack:2,block:2},unitsCannotAbsorbDamage:true},strong:{unitCombatBonus:{attack:3,block:3},unitsCannotAbsorbDamage:true}},
   {id:'learning',name:'Learning',color:'blue',type:'advanced',basic:{draw:1},strong:{draw:3}},
   {id:'mana-storm',name:'Mana Storm',color:'white',type:'advanced',basic:{manaStorm:'crystal-and-reroll'},strong:{manaStorm:'reroll-and-use-three'}},
   {id:'maximal-effect',name:'Maximal Effect',color:'red',type:'advanced',basic:{any:2},strong:{any:5}},
