@@ -1,4 +1,5 @@
 import { calculateScore, CHARACTER_PROFILES, CONTENT_COUNTS, createGame, createMultiplayerGame, gameViewForPlayer, legalExplorations, legalMoves, reduceGame, TERRAIN_COST, SITES, TOVAK_SKILLS } from './gameEngine';
+import { MAP_TILES } from './gameContent';
 
 const act = (state, type, extra={}) => reduceGame(state,{type,...extra});
 const cardToHand = (state,id) => {
@@ -11,6 +12,7 @@ test('base content decks have full-size catalogs',()=>{expect(CONTENT_COUNTS).to
 
 describe('setup and deterministic state',()=>{
   test('starts a six-round solo conquest with five cards',()=>{const s=createGame(4);expect(s.round).toBe(1);expect(s.time).toBe('day');expect(s.player.hand).toHaveLength(5);expect(s.source).toHaveLength(3);});
+  test('builds the playable map from every catalog tile without duplicate coordinates',()=>{const s=createGame(4),catalogHexes=MAP_TILES.reduce((sum,tile)=>sum+tile.hexes.length,0),coordinates=s.map.map(hex=>`${hex.q}:${hex.r}`);expect(s.map).toHaveLength(catalogHexes+1);expect(new Set(coordinates).size).toBe(coordinates.length);});
   test('same seed creates same deck',()=>expect(createGame(9).player.hand.map(c=>c.id)).toEqual(createGame(9).player.hand.map(c=>c.id)));
   test('terrain table applies day and night inversions',()=>{expect(TERRAIN_COST.day.forest).toBe(3);expect(TERRAIN_COST.night.forest).toBe(5);expect(TERRAIN_COST.day.desert).toBe(5);expect(TERRAIN_COST.night.desert).toBe(3);});
 });

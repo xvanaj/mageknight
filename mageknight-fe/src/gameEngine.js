@@ -111,22 +111,6 @@ export const UNITS = [
   ...EXTENDED_UNITS,
 ];
 
-const HEXES = [
-  [0, 0, 'plains', 'portal'], [1, 0, 'plains', null], [1, -1, 'forest', 'glade'],
-  [0, -1, 'plains', 'village'], [-1, 0, 'hills', 'mine'], [-1, 1, 'forest', null], [0, 1, 'lake', null],
-  [2, 0, 'hills', 'keep', 'guards'], [2, -1, 'plains', 'rampaging', 'prowlers'], [2, -2, 'forest', 'monastery'],
-  [1, -2, 'hills', 'mage-tower', 'mage'], [0, -2, 'lake', null], [-1, -1, 'desert', 'ruins', 'golem'],
-  [-2, 0, 'wasteland', 'dungeon', 'golem'], [-2, 1, 'plains', 'village'], [-2, 2, 'forest', 'glade'],
-  [-1, 2, 'swamp', 'rampaging', 'diggers'], [0, 2, 'mountain', null], [1, 1, 'desert', 'draconum', 'dragon'],
-  [3, -1, 'plains', null], [3, -2, 'wasteland', 'city', 'city', 'red'], [3, -3, 'desert', null], [2, -3, 'forest', 'mine'],
-  [-3, 0, 'plains', null], [-3, 1, 'hills', 'tomb', 'tomb'], [-3, 2, 'forest', 'monster-den', 'den'],
-  [-3, 3, 'swamp', 'spawning-grounds', 'spawn'], [-2, 3, 'plains', 'city', 'city', 'blue'],
-  [-1, 3, 'hills', 'city', 'city', 'white'], [0, 3, 'forest', 'city', 'city', 'green'],[1,3,'desert','draconum','highDragon'],
-  [4,-1,'plains','village'],[4,-2,'forest','glade'],[4,-3,'hills','keep','guards'],[4,-4,'desert','ruins','golem'],[3,-4,'wasteland','rampaging','prowlers'],[2,-4,'lake',null],
-  [1,-4,'forest','monster-den','den'],[0,-4,'desert','draconum','dragon'],[-1,-3,'hills','keep','guards'],[-2,-2,'plains','village'],[-3,-1,'wasteland','dungeon','golem'],[-4,0,'forest','mage-tower','mage'],
-  [-4,1,'plains','monastery'],[-4,2,'swamp','ruins','golem'],[-4,3,'forest','glade'],[-4,4,'desert','draconum','iceDragon'],[-3,4,'hills','keep','guards'],[-2,4,'plains','mine'],
-].map(([q, r, terrain, site, enemy, cityColor]) => ({ q, r, s: -q-r, terrain, site, cityColor, mineColor: site==='mine' ? COLORS[(Math.abs(q)+Math.abs(r))%4] : undefined, enemy: enemy ? { ...ENEMIES[enemy], uid: `${q}:${r}:${enemy}` } : null, conquered: false, burned:false, used: false }));
-
 const ADVANCED_CARDS = [
   {id:'path-finding',name:'Path Finding',color:'green',type:'advanced',basic:{move:3},strong:{move:5}},
   {id:'blood-rage',name:'Blood Rage',color:'red',type:'advanced',basic:{attack:3},strong:{attack:6}},
@@ -191,12 +175,11 @@ const handLimit = state => {
   return printedLimit+Math.max(nearOwnedKeep?(state.player.keeps||0):0,cityBonus)+planning;
 };
 
-const tileForHex=(q,r)=>MAP_TILES.find(tile=>tile.hexes.some(hex=>hex[0]===q&&hex[1]===r));
-const prepareMap=exploration=>clone(HEXES).map(hex=>{
-  const tile=tileForHex(hex.q,hex.r);
-  const category=hex.site==='rampaging'?'orc':hex.site==='draconum'?'dragon':hex.site==='keep'?'grey':hex.site==='mage-tower'?'violet':['dungeon','monster-den','spawning-grounds'].includes(hex.site)?'brown':hex.site==='tomb'?'red':null;
-  return {...hex,tileId:tile?.id||'portal',core:Boolean(tile?.core),enemyCategory:category,enemyFaceDown:['keep','mage-tower','city'].includes(hex.site)&&Boolean(hex.enemy),revealed:!exploration||!tile};
-});
+const prepareMap=exploration=>{
+  const portal={q:0,r:0,s:0,terrain:'plains',site:'portal',enemy:null,enemies:[],tileId:'portal',core:false,enemyCategory:null,enemyFaceDown:false,revealed:true};
+  const hexes=MAP_TILES.flatMap(tile=>tile.hexes.map(row=>{const [q,r,terrain,site=null,enemyId=null,cityColor=null]=row,category=site==='rampaging'?'orc':site==='draconum'?'dragon':site==='keep'?'grey':site==='mage-tower'?'violet':['dungeon','monster-den','spawning-grounds'].includes(site)?'brown':site==='tomb'?'red':null,baseEnemy=enemyId?clone(ENEMIES[enemyId]):null,enemy=baseEnemy?{...baseEnemy,category,uid:`${q}:${r}:${enemyId}`}:null;return {q,r,s:-q-r,terrain,site,mineColor:site==='mine'?COLORS[(Math.abs(q)+Math.abs(r))%4]:undefined,enemy,enemies:enemy?[clone(enemy)]:[],cityColor,tileId:tile.id,core:Boolean(tile.core),enemyCategory:category,enemyFaceDown:['keep','mage-tower','city'].includes(site)&&Boolean(enemy),conquered:false,burned:false,used:false,revealed:!exploration};}));
+  return [portal,...hexes];
+};
 
 const createEnemyDecks=seed=>Object.fromEntries(Object.entries(ENEMY_POOLS).map(([category,ids],index)=>[category,shuffled(ids.map((id,copy)=>({...clone(ENEMIES[id]),category,uid:`${category}-${id}-${copy}`})),seed+101+index*19)]));
 function drawEnemyToken(state,category){if(!state.enemyDecks[category]?.length&&state.enemyDiscards[category]?.length)state.enemyDecks[category]=shuffled(state.enemyDiscards[category].splice(0),state.seed+state.turn*83+category.length*19);return state.enemyDecks[category]?.shift()||null;}
