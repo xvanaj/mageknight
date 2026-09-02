@@ -444,7 +444,7 @@ export function reduceGame(input, action) {
     case 'USE_UNIT': {
       const unit = state.player.units.find(u => u.id === action.id); if (!unit || unit.spent||unit.wounded) return fail(state, 'That unit is unavailable or wounded.');
       if(state.combat && SITES[state.map.find(h=>h.q===state.combat.q&&h.r===state.combat.r)?.site]?.underground)return fail(state,'Units cannot be used in a Dungeon or Tomb.');
-      const unitCombatStats={'combat-ranged':['ranged','siege'],'combat-block':['block','iceBlock','fireBlock'],'combat-attack':['attack','iceAttack','fireAttack','ranged','siege']}[state.phase];if(unitCombatStats&&!unitCombatStats.some(stat=>unit.ability?.[stat]))return fail(state,`That Unit has no ability usable in the ${state.phase.replace('combat-','')} phase.`);if(!['action','combat-ranged','combat-block','combat-attack'].includes(state.phase))return fail(state,'That Unit cannot be activated in this phase.');
+      const unitCombatStats={'combat-ranged':['ranged','siege'],'combat-block':['block','iceBlock','fireBlock'],'combat-attack':['attack','iceAttack','fireAttack','ranged','siege'],'cooperative-entry':['move']}[state.phase];if(unitCombatStats&&!unitCombatStats.some(stat=>unit.ability?.[stat]))return fail(state,`That Unit has no ability usable in the ${state.phase.replace('combat-','')} phase.`);if(!['action','cooperative-entry','combat-ranged','combat-block','combat-attack'].includes(state.phase))return fail(state,'That Unit cannot be activated in this phase.');
       addEffect(state, unit.ability); unit.spent = true;state.player.atTurnStart=false; log(state, `${unit.name} activated.`); return state;
     }
     case 'ASSIGN_BANNER': {
@@ -577,7 +577,7 @@ function applyTacticOnTake(state,tactic,action={}){
 }
 
 function activateTactic(state,action){
-  const tactic=state.player.tactic||state.tactic;if(!tactic)return fail(state,'You have no tactic this round.');if(state.player.tacticUsed)return fail(state,`${tactic.name} has already been used.`);if(state.phase!=='action')return fail(state,'Use this tactic during your action phase.');
+  const tactic=state.player.tactic||state.tactic;if(!tactic)return fail(state,'You have no tactic this round.');if(state.player.tacticUsed)return fail(state,`${tactic.name} has already been used.`);if(state.phase!=='action'&&!(state.phase==='cooperative-entry'&&tactic.effect==='choice'&&action.mode==='move'))return fail(state,'Use this tactic during your action phase.');
   if(tactic.effect==='choice')state.points[action.mode==='influence'?'influence':'move']+=action.mode==='influence'?1:2;
   else if(tactic.effect==='mana'){const color=state.time==='day'?'gold':action.color;if(state.time==='night'&&!COLORS.includes(color))return fail(state,'Choose a basic mana color.');state.mana.push(color);}
   else if(tactic.effect==='cycle'){
@@ -594,7 +594,7 @@ function activateSkill(state,action){
   const skill=state.player.skills.find(s=>s.id===action.id);if(!skill)return fail(state,'You have not learned that Skill.');
   if(skill.used||skill.roundUsed)return fail(state,`${skill.name} has already been used ${skill.cadence==='round'?'this round':'this turn'}.`);
   const mark=()=>{if(skill.cadence==='round')skill.roundUsed=true;else skill.used=true;log(state,`${skill.name} activated.`);return state;};
-  if(skill.id==='double-time'){if(state.phase!=='action')return fail(state,'Double Time is used outside combat.');state.points.move+=state.time==='day'?2:1;return mark();}
+  if(skill.id==='double-time'){if(!['action','cooperative-entry'].includes(state.phase))return fail(state,'Double Time is used outside combat.');state.points.move+=state.time==='day'?2:1;return mark();}
   if(skill.id==='night-sharpshooting'){if(!['combat-ranged','combat-attack'].includes(state.phase))return fail(state,'Night Sharpshooting is a combat Skill.');state.points.ranged+=(state.time==='night'||isUnderground(state))?2:1;return mark();}
   if(skill.id==='cold-swordsmanship'){if(state.phase!=='combat-attack')return fail(state,'Cold Swordsmanship is used in the Attack phase.');if(action.mode==='ice')state.points.iceAttack+=2;else state.points.attack+=2;return mark();}
   if(skill.id==='shield-mastery'){if(state.phase!=='combat-block')return fail(state,'Shield Mastery is used in the Block phase.');if(action.mode==='ice')state.points.iceBlock+=2;else if(action.mode==='fire')state.points.fireBlock+=2;else state.points.block+=3;return mark();}
