@@ -127,6 +127,11 @@ describe('authoritative multiplayer engine',()=>{
   test('a one-player online game advances directly to the next round',()=>{const solo={...lobby,players:[lobby.players[0]]};let s=createMultiplayerGame(solo,42);s=reduceGame(s,{type:'SELECT_TACTIC',id:'early-bird',playerId:'p1'});s.players[0].deck=[];s.players[0].hand=[];s=reduceGame(s,{type:'END_ROUND',playerId:'p1'});expect(s.round).toBe(2);expect(s.time).toBe('night');expect(s.phase).toBe('tactic');expect(s.activePlayerId).toBeNull();expect(s.tacticPickOrder).toEqual(['p1']);});
 });
 
+describe('safe turn reset',()=>{
+  test('restores all reversible card and movement choices to the turn checkpoint',()=>{let s=createGame(91),before=s.player.hand.map(card=>card.uid);for(const card of s.player.hand.slice(0,2))s=reduceGame(s,{type:'PLAY_CARD',uid:card.uid,mode:'sideways',as:'move'});s=reduceGame(s,{type:'MOVE',q:1,r:0});expect([s.player.q,s.player.r]).toEqual([1,0]);s=reduceGame(s,{type:'UNDO_TURN'});expect([s.player.q,s.player.r]).toEqual([0,0]);expect(s.player.hand.map(item=>item.uid)).toEqual(before);expect(s.points.move).toBe(0);});
+  test('is locked after a Source reroll reveals new information',()=>{let s=createGame(92);s=reduceGame(s,{type:'TAKE_SOURCE',id:s.source[0].id});expect(s.undoCheckpoint).toBeNull();expect(s.undoBlockedReason).toMatch(/Source die/i);s=reduceGame(s,{type:'UNDO_TURN'});expect(s.error).toMatch(/Source die/i);});
+});
+
 describe('full multiplayer rules mode',()=>{
   const lobby=scenario=>({id:'FULL1234',scenario,players:[{id:'p1',name:'One',character:'tovak'},{id:'p2',name:'Two',character:'arythea'}]});
   const started=scenario=>{let s=createMultiplayerGame(lobby(scenario),77);s=reduceGame(s,{type:'SELECT_TACTIC',id:'early-bird',playerId:'p1'});return reduceGame(s,{type:'SELECT_TACTIC',id:'rethink',playerId:'p2'});};
