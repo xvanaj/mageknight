@@ -150,7 +150,7 @@ export const CONTENT_COUNTS={advancedActions:ADVANCED_CARDS.length,spells:SPELL_
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const migrateState=state=>{
-  const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.skipNextTurn=Boolean(player.skipNextTurn);player.roundOrderFaceDown=Boolean(player.roundOrderFaceDown);player.cardsPlayedThisTurn=player.cardsPlayedThisTurn??player.played?.length??0;player.atTurnStart=Boolean(player.atTurnStart);player.emptyHandPassAllowed=Boolean(player.emptyHandPassAllowed);player.movedThisTurn=Boolean(player.movedThisTurn);player.turnAction=player.turnAction||null;player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
+  const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.skipNextTurn=Boolean(player.skipNextTurn);player.roundOrderFaceDown=Boolean(player.roundOrderFaceDown);player.cardsPlayedThisTurn=player.cardsPlayedThisTurn??player.played?.length??0;player.atTurnStart=Boolean(player.atTurnStart);player.emptyHandPassAllowed=Boolean(player.emptyHandPassAllowed);player.movedThisTurn=Boolean(player.movedThisTurn);player.moveHistory=player.moveHistory||[];player.turnAction=player.turnAction||null;player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0}));});
   state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.enemyDiscards=state.enemyDiscards||{};state.enemyDiscards.brown=state.enemyDiscards.brown||[];state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
 };
 const enemyGroup=members=>{const list=members.map(clone);return {id:list.map(enemy=>enemy.id).join('+'),uid:list.map(enemy=>enemy.uid||enemy.id).join('|'),name:list.length>1?`${list.length} defenders`:list[0].name,armor:list.reduce((sum,enemy)=>sum+enemy.armor,0),attack:list.reduce((sum,enemy)=>sum+enemy.attack,0),fame:list.reduce((sum,enemy)=>sum+enemy.fame,0),traits:[...new Set(list.flatMap(enemy=>enemy.traits||[]))],members:list};};
@@ -177,11 +177,12 @@ const levelFor = fame => Math.min(10,FAME_LEVELS.filter(value=>fame>=value).leng
 const reputationInfluence=reputation=>({5:3,4:2,3:2,2:1,1:1,0:0,'-1':-1,'-2':-1,'-3':-2,'-4':-2,'-5':-3,'-6':-5}[reputation]??-99);
 const baseHandLimit=player=>5+Math.floor((player.level-1)/4);
 const handLimit = state => {
-  const nearOwnedKeep=state.map.some(h=>h.site==='keep'&&h.conquered&&distance(state.player,h)<=1);
-  const nearCity=state.map.some(h=>h.site==='city'&&h.conquered&&distance(state.player,h)<=1);
+  const identity=state.player.id||state.player.character;
+  const nearOwnedKeep=state.map.some(h=>h.site==='keep'&&h.conquered&&h.ownerId===identity&&distance(state.player,h)<=1);
+  const cityBonus=state.map.reduce((bonus,h)=>h.site==='city'&&h.conquered&&distance(state.player,h)<=1&&(h.ownerId===identity||(h.conquerors||[]).includes(identity))?Math.max(bonus,h.ownerId===identity?2:1):bonus,0);
   const printedLimit=baseHandLimit(state.player);
   const planning=state.player.tactic?.id==='planning'&&!state.player.tacticUsed?1:0;
-  return printedLimit+Math.max(nearOwnedKeep?(state.player.keeps||0):0,nearCity?2:0)+planning;
+  return printedLimit+Math.max(nearOwnedKeep?(state.player.keeps||0):0,cityBonus)+planning;
 };
 
 const tileForHex=(q,r)=>MAP_TILES.find(tile=>tile.hexes.some(hex=>hex[0]===q&&hex[1]===r));
@@ -199,7 +200,7 @@ const makePlayer=(seed,character='tovak',name)=>{
   const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
   const cards=applyCharacterDeck(CARDS,character);
   const deck=shuffled(cards.map((card,index)=>({...clone(card),uid:`${card.id}-${index}`})),seed);
-  return {name:profile.name||name||'Mage Knight',character,q:0,r:0,fame:0,reputation:0,level:1,armor:profile.armor||2,command:1,deck:deck.slice(5),hand:deck.slice(0,5),discard:[],played:[],removed:[],wounds:0,crystals:{blue:0,red:0,green:0,white:0},units:[],keeps:0,cities:0,skills:[],defeated:[],assaults:0,pvpWins:0,tactic:null,tacticUsed:false,extraTurn:false,carry:null,skipNextTurn:false,roundOrderFaceDown:false,cardsPlayedThisTurn:0,atTurnStart:false,emptyHandPassAllowed:false,movedThisTurn:false,turnAction:null};
+  return {name:profile.name||name||'Mage Knight',character,q:0,r:0,fame:0,reputation:0,level:1,armor:profile.armor||2,command:1,deck:deck.slice(5),hand:deck.slice(0,5),discard:[],played:[],removed:[],wounds:0,crystals:{blue:0,red:0,green:0,white:0},units:[],keeps:0,cities:0,skills:[],defeated:[],assaults:0,pvpWins:0,tactic:null,tacticUsed:false,extraTurn:false,carry:null,skipNextTurn:false,roundOrderFaceDown:false,cardsPlayedThisTurn:0,atTurnStart:false,emptyHandPassAllowed:false,movedThisTurn:false,moveHistory:[],turnAction:null};
 };
 
 export function createGame(seed = 20260901, options = {}) {
@@ -252,6 +253,7 @@ export function gameViewForPlayer(input,playerId){
 
 function freshPoints() { return { move: 0, influence: 0, heal: 0, attack: 0, block: 0, ranged: 0, siege: 0, iceAttack:0, fireAttack:0, iceBlock:0, fireBlock:0 }; }
 function currentHex(state) { return state.map.find(h => h.q === state.player.q && h.r === state.player.r); }
+const isSafeSpace=(state,player,hex)=>{if(!hex||!Number.isFinite(TERRAIN_COST[state.time][hex.terrain]))return false;const identity=player.id||player.character,fortified=SITES[hex.site]?.kind==='fortified';if((fortified&&!hex.conquered)||(hex.site==='keep'&&hex.conquered&&hex.ownerId!==identity))return false;const sharedAllowed=hex.site==='portal'||(hex.site==='city'&&hex.conquered);return sharedAllowed||!(state.players||[]).some(other=>other.id!==player.id&&other.q===hex.q&&other.r===hex.r);};
 const cardWithUid = (card,state) => ({...clone(card),uid:`${card.id}-${state.turn}-${state.player.deck.length}-${state.player.discard.length}`});
 const resistanceCount = enemy => ['physical-resistant','fire-resistant','ice-resistant'].filter(t=>enemy.traits.includes(t)).length;
 const isUnderground = state => Boolean(SITES[currentHex(state)?.site]?.underground);
@@ -302,7 +304,7 @@ function wound(state, count) { state.player.wounds += count; for (let i=0;i<coun
 export function legalMoves(state) {
   if(state.multiplayer&&state.viewerPlayerId&&state.viewerPlayerId!==state.activePlayerId)return [];
   if (state.phase !== 'action'||state.player.turnAction) return [];
-  return state.map.filter(h => h.revealed!==false&&distance(state.player, h) === 1 && (!h.enemy || SITES[h.site]?.kind==='adventure')&&!isOccupiedByOpponent(state,h)&&Number.isFinite(TERRAIN_COST[state.time][h.terrain]))
+  return state.map.filter(h => h.revealed!==false&&distance(state.player, h) === 1 && (!h.enemy || SITES[h.site]?.kind==='adventure')&&Number.isFinite(TERRAIN_COST[state.time][h.terrain]))
     .map(h => ({ ...h, cost: TERRAIN_COST[state.time][h.terrain], legal: state.points.move >= TERRAIN_COST[state.time][h.terrain] }));
 }
 const isOccupiedByOpponent=(state,hex)=>Boolean(state.multiplayer&&hex.site!=='portal'&&state.players.some(player=>player.id!==state.player.id&&player.q===hex.q&&player.r===hex.r));
@@ -407,12 +409,12 @@ export function reduceGame(input, action) {
       if (state.phase !== 'action') return fail(state, 'Finish combat before moving.');if(state.player.turnAction)return fail(state,'Movement must happen before your turn action.');
       const hex = state.map.find(h => h.q === action.q && h.r === action.r); if (!hex || distance(state.player,hex)!==1) return fail(state, 'You may only move to an adjacent revealed space.');
       if(hex.revealed===false)return fail(state,'Explore that map tile before moving onto it.');
-      if(isOccupiedByOpponent(state,hex))return fail(state,'Another Mage Knight occupies that space.');
       if (hex.enemy && SITES[hex.site]?.kind!=='adventure') return fail(state, 'An enemy blocks that space. Start combat to enter it.');
       const provoked=provokingEnemies(state,hex);
+      if(isOccupiedByOpponent(state,hex)&&provoked.length)return fail(state,'You cannot enter an occupied space while provoking a rampaging enemy.');
       const cost = TERRAIN_COST[state.time][hex.terrain]; if (!Number.isFinite(cost)) return fail(state, 'That terrain is impassable.');
       if (state.points.move < cost) return fail(state, `You need ${cost} Move.`);
-      const origin={q:state.player.q,r:state.player.r};state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r;state.player.atTurnStart=false;state.player.movedThisTurn=true; log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
+      const origin={q:state.player.q,r:state.player.r};state.player.moveHistory.push(origin);state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r;state.player.atTurnStart=false;state.player.movedThisTurn=true; log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
       if(provoked.length){const enemies=provoked.flatMap(source=>(source.enemy.members||source.enemies||[source.enemy]).map(enemy=>clone(enemy))),enemySources=Object.fromEntries(provoked.flatMap(source=>(source.enemy.members||source.enemies||[source.enemy]).map(enemy=>[enemyKey(enemy),{q:source.q,r:source.r,site:source.site}])));state.player.turnAction='combat';state.phase='combat-ranged';state.combat={q:null,r:null,origin,kind:'provoked',enemy:enemyGroup(enemies),enemies,enemySources,defeatedIds:[],blockedIds:[],blocked:false,woundsTaken:0,damageUnits:[]};log(state,`${provoked.map(item=>item.enemy.name).join(' and ')} attacked during movement.`);}
       return state;
     }
@@ -706,8 +708,9 @@ function claimReward(state,action){
 function interact(state, action) {
   if(state.phase!=='action')return fail(state,'Finish combat before interacting.'); const hex=currentHex(state);
   if(!hex?.site)return fail(state,'There is nothing to interact with here.');
+  if(state.multiplayer&&state.players.some(player=>player.id!==state.player.id&&player.q===state.player.q&&player.r===state.player.r)&&!(hex.site==='city'&&hex.conquered))return fail(state,'You cannot take another action while sharing a space with another Mage Knight.');
   if(state.player.reputation<=-7)return fail(state,'Your Reputation is at X; locals refuse to interact.');
-  const city=hex.site==='city'&&hex.conquered;const ownedSite=(hex.site==='keep'||hex.site==='mage-tower')&&hex.conquered;
+  const identity=state.player.id||state.player.character,city=hex.site==='city'&&hex.conquered;const ownedSite=(hex.site==='mage-tower'&&hex.conquered)||(hex.site==='keep'&&hex.conquered&&hex.ownerId===identity);
   if(['keep','mage-tower','city'].includes(hex.site)&&!ownedSite&&!city)return fail(state,'This fortified site must be conquered before interaction.');
   if(action.kind==='heal') { const count=action.count||1; if(!['village','monastery'].includes(hex.site))return fail(state,'Healing is not offered here.');const each=hex.site==='monastery'?2:3;const price=count*each;if(state.points.influence<price)return fail(state,`You need ${price} Influence.`); if(state.player.wounds<count)return fail(state,'Not enough Wounds to heal.'); state.points.influence-=price; state.player.wounds-=count;removeWounds(state,count);log(state,`Healed ${count} Wound${count===1?'':'s'}.`); return state; }
   if(action.kind==='recruit') { const unit=state.offer.units.find(u=>u.id===action.id); if(!unit)return fail(state,'That unit is not in the offer.');const allowed=(city&&hex.cityColor==='white')||unit.sites.includes(hex.site)||(city&&unit.sites.includes('city'));if(!allowed)return fail(state,`${unit.name} cannot be recruited here.`); if(state.player.units.length>=state.player.command)return fail(state,'All command slots are full.'); const modifier=reputationInfluence(state.player.reputation); const cost=Math.max(0,unit.cost-modifier); if(state.points.influence<cost)return fail(state,`You need ${cost} Influence after reputation.`); state.points.influence-=cost; state.player.units.push({...unit,spent:false,wounded:false,woundCount:0}); state.offer.units=state.offer.units.filter(u=>u.id!==unit.id); log(state,`Recruited ${unit.name}.`); return state; }
@@ -724,13 +727,20 @@ function removeWounds(state,count){
   for(const pile of [state.player.hand,state.player.discard])for(let i=pile.length-1;i>=0&&count>0;i--)if(pile[i].id==='wound'){pile.splice(i,1);count--;}
 }
 
+function applyForcedWithdrawal(state){
+  let hex=currentHex(state),steps=0;
+  while(!isSafeSpace(state,state.player,hex)&&state.player.moveHistory.length){const previous=state.player.moveHistory.pop();state.player.q=previous.q;state.player.r=previous.r;wound(state,1);steps++;hex=currentHex(state);}
+  if(steps)log(state,`Forced withdrawal backtracked ${steps} space${steps===1?'':'s'} and caused ${steps} Wound${steps===1?'':'s'}.`);
+  return hex;
+}
+
 function endTurn(state,roundAnnouncement=false) {
-  const hex=currentHex(state);
+  const hex=applyForcedWithdrawal(state);
   const immediateExtraTurn=Boolean(state.player.extraTurn);state.player.extraTurn=false;
   const carry=state.player.carry;state.player.carry=null;
   if(!roundAnnouncement&&hex?.site==='mine'){const color=hex.mineColor;if(state.player.crystals[color]<3){state.player.crystals[color]++;log(state,`The mine produced a ${color} crystal.`);}}
   if(!roundAnnouncement&&hex?.site==='glade'&&state.player.wounds>0){const before=state.player.hand.length+state.player.discard.length;removeWounds(state,1);if(state.player.hand.length+state.player.discard.length<before){state.player.wounds--;log(state,'The magical glade removed one Wound.');}}
-  state.player.discard.push(...state.player.played); state.player.played=[];state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=false;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.turnAction=null; state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value); state.mana=[]; state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;
+  state.player.discard.push(...state.player.played); state.player.played=[];state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=false;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.moveHistory=[];state.player.turnAction=null; state.points=freshPoints();if(carry)Object.entries(carry).forEach(([key,value])=>state.points[key]+=value); state.mana=[]; state.sourceTaken=false;state.bonuses.sideways=null;state.bonuses.manaOverload=null;
   state.player.skills.forEach(s=>s.used=false); const target=handLimit(state); if(!roundAnnouncement&&state.player.hand.length<target)draw(state,target-state.player.hand.length);
   if(!roundAnnouncement&&hex?.site==='glade')state.mana.push(state.time==='day'?'gold':'black');
   state.turn++;
@@ -753,9 +763,9 @@ function nextRound(state) {
   if(state.round>=(state.maxRounds||6)){state.status='lost';state.scoring=calculateScore(state);log(state,'The final Night ends before the cities are conquered. Final scoring is complete.');return state;}
   state.round++; state.time=state.time==='day'?'night':'day';refreshOffers(state);
   if(state.multiplayer){
-    state.players.forEach((player,index)=>{bindPlayerState(state,player.id);player.deck=shuffled([...player.discard,...player.hand],state.seed+state.round+index*997);player.hand=[];player.discard=[];player.tactic=null;player.tacticUsed=false;player.cardsPlayedThisTurn=0;player.atTurnStart=false;player.emptyHandPassAllowed=false;player.movedThisTurn=false;player.turnAction=null;draw(state,handLimit(state));player.units.forEach(unit=>unit.spent=false);player.skills.forEach(skill=>{skill.used=false;skill.roundUsed=false;});});
+    state.players.forEach((player,index)=>{bindPlayerState(state,player.id);player.deck=shuffled([...player.discard,...player.hand],state.seed+state.round+index*997);player.hand=[];player.discard=[];player.tactic=null;player.tacticUsed=false;player.cardsPlayedThisTurn=0;player.atTurnStart=false;player.emptyHandPassAllowed=false;player.movedThisTurn=false;player.moveHistory=[];player.turnAction=null;draw(state,handLimit(state));player.units.forEach(unit=>unit.spent=false);player.skills.forEach(skill=>{skill.used=false;skill.roundUsed=false;});});
     state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=[...state.players].sort((a,b)=>a.fame-b.fame||state.players.indexOf(a)-state.players.indexOf(b)).map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];bindPlayerState(state,state.players[0].id);
-  } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];state.player.tactic=null;state.player.tacticUsed=false;state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=!state.tacticsEnabled;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.turnAction=null;draw(state,handLimit(state));state.player.units.forEach(unit=>{unit.spent=false;});state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
+  } else {state.player.deck=shuffled([...state.player.discard,...state.player.hand],state.seed+state.round);state.player.hand=[];state.player.discard=[];state.player.tactic=null;state.player.tacticUsed=false;state.player.cardsPlayedThisTurn=0;state.player.atTurnStart=!state.tacticsEnabled;state.player.emptyHandPassAllowed=false;state.player.movedThisTurn=false;state.player.moveHistory=[];state.player.turnAction=null;draw(state,handLimit(state));state.player.units.forEach(unit=>{unit.spent=false;});state.player.skills.forEach(s=>{s.used=false;s.roundUsed=false;});}
   state.map.forEach(h=>h.used=false);const sourceCount=(state.multiplayer?state.players.length:1)+2;state.source=shuffled([...COLORS,state.time==='day'?'gold':'black',...COLORS],state.seed+state.round).slice(0,sourceCount).map((color,i)=>({id:`die-${i}`,color})); state.points=freshPoints();state.turn++;state.mana=[];state.sourceTaken=false;state.tactic=null;if(state.tacticsEnabled)state.phase='tactic';
   log(state,`${state.time==='day'?'Day':'Night'} ${Math.ceil(state.round/2)} begins.`); return state;
 }
