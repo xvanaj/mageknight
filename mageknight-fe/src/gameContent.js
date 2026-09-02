@@ -134,7 +134,7 @@ export const EXTENDED_SPELLS = [
   {id:'demolish',name:'Demolish',color:'red',type:'spell',basic:{allArmorChange:{amount:-1,minimum:1,exclude:'fire-resistant'},exposeAll:'fortification'},strong:{defeatTarget:{exclude:'fire-resistant',excludeArcane:true},allArmorChange:{amount:-1,minimum:1,exclude:'fire-resistant'}}},
   {id:'burning-shield',name:'Burning Shield',color:'red',type:'spell',basic:{fireBlock:6},strong:{fireAttack:8}},
   {id:'chill',name:'Chill',color:'blue',type:'spell',basic:{enemyControl:{skipAttack:true,removeFireResistance:true,exclude:'ice-resistant',excludeArcane:true}},strong:{enemyControl:{skipAttack:true,armorChange:-4,minimum:1,exclude:'ice-resistant',excludeArcane:true}}},
-  {id:'mana-bolt',name:'Mana Bolt',color:'blue',type:'spell',basic:{ranged:5},strong:{siege:8}},
+  {id:'mana-bolt',name:'Mana Bolt',color:'blue',type:'spell',basic:{manaBolt:8},strong:{manaBolt:11}},
   {id:'expose',name:'Expose',color:'white',type:'spell',basic:{ranged:2,exposeTarget:'both'},strong:{options:[{id:'fortification',label:'All enemies lose fortification; Ranged Attack 3',effect:{ranged:3,exposeAll:'fortification'}},{id:'resistances',label:'All enemies lose resistances; Ranged Attack 3',effect:{ranged:3,exposeAll:'resistances'}}]}},
   {id:'underground-travel',name:'Underground Travel',color:'green',type:'spell',competitive:true,basic:{move:5},strong:{move:9}},
   {id:'wings-of-wind',name:'Wings of Wind',color:'white',type:'spell',basic:{move:5},strong:{move:8}},
