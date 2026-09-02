@@ -570,6 +570,9 @@ export function reduceGame(input, action) {
     case 'ASSIGN_DAMAGE_UNIT': {
       if(state.phase!=='combat-damage'||!state.combat)return fail(state,'Choose Units while assigning one enemy attack.');const unit=state.player.units.find(item=>item.id===action.id);if(!unit||unit.wounded||(state.combat.damageAssignedUnitIds||[]).includes(action.id))return fail(state,'Only an unwounded unit not already assigned in this combat can receive damage.');state.combat.damageUnits=state.combat.damageUnits||[];const index=state.combat.damageUnits.indexOf(unit.id);if(index>=0)state.combat.damageUnits.splice(index,1);else state.combat.damageUnits.push(unit.id);return state;
     }
+    case 'SELECT_DAMAGE_ENEMY': {
+      if(state.phase!=='combat-damage'||!state.combat?.damageQueue?.length)return fail(state,'There is no enemy attack awaiting damage assignment.');const index=state.combat.damageQueue.findIndex(enemy=>enemyKey(enemy)===action.targetId);if(index<0)return fail(state,'Choose an unblocked enemy attack.');const [enemy]=state.combat.damageQueue.splice(index,1);state.combat.damageQueue.unshift(enemy);state.combat.damageUnits=[];return state;
+    }
     case 'RESOLVE_DAMAGE': {
       if(state.phase!=='combat-damage'||!state.combat?.damageQueue?.length)return fail(state,'There is no enemy attack awaiting damage assignment.');const enemy=state.combat.damageQueue.shift();assignCombatDamage(state,enemy);state.combat.damageUnits=[];if(!state.combat.damageQueue.length){discardCombatSummons(state);state.phase='combat-attack';log(state,'All unblocked attacks have been assigned. Melee Attack phase.');}return state;
     }
