@@ -152,7 +152,7 @@ const clone = value => JSON.parse(JSON.stringify(value));
 const isBanner=card=>card?.type==='artifact'&&card.id?.startsWith('banner-');
 const migrateState=state=>{
   const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.skipNextTurn=Boolean(player.skipNextTurn);player.roundOrderFaceDown=Boolean(player.roundOrderFaceDown);player.cardsPlayedThisTurn=player.cardsPlayedThisTurn??player.played?.length??0;player.atTurnStart=Boolean(player.atTurnStart);player.emptyHandPassAllowed=Boolean(player.emptyHandPassAllowed);player.movedThisTurn=Boolean(player.movedThisTurn);player.moveHistory=player.moveHistory||[];player.turnAction=player.turnAction||null;player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0,banner:unit.banner?{...unit.banner,used:Boolean(unit.banner.used)}:null}));});
-  state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.enemyDiscards=state.enemyDiscards||{};state.enemyDiscards.brown=state.enemyDiscards.brown||[];state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;state.undoBlockedReason=state.undoBlockedReason||null;if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
+  state.decks=state.decks||{};state.offer.monastery=state.offer.monastery||[];const offeredIds=new Set((state.offer?.units||[]).map(unit=>unit.id));state.decks.regularUnits=state.decks.regularUnits||clone(UNITS.filter(unit=>!unit.elite&&!offeredIds.has(unit.id)));state.decks.eliteUnits=state.decks.eliteUnits||clone(UNITS.filter(unit=>unit.elite&&!offeredIds.has(unit.id)));state.enemyDecks=state.enemyDecks||createEnemyDecks(state.seed||1);state.enemyDiscards=state.enemyDiscards||{};state.enemyDiscards.brown=state.enemyDiscards.brown||[];state.scenarioEndTurnsRemaining=state.scenarioEndTurnsRemaining??null;state.undoBlockedReason=state.undoBlockedReason||null;state.removedTactics=state.removedTactics||{day:[],night:[]};state.removedTactics.day=state.removedTactics.day||[];state.removedTactics.night=state.removedTactics.night||[];state.pendingTacticRemoval=state.pendingTacticRemoval||null;state.commonSkills=state.commonSkills||[];if(state.combat){state.combat.damageUnits=state.combat.damageUnits||[];state.combat.enemies=state.combat.enemies||clone(state.combat.enemy?.members||[state.combat.enemy].filter(Boolean));state.combat.defeatedIds=state.combat.defeatedIds||[];state.combat.blockedIds=state.combat.blockedIds||[];}state.version=5;return state;
 };
 const enemyGroup=members=>{const list=members.map(clone);return {id:list.map(enemy=>enemy.id).join('+'),uid:list.map(enemy=>enemy.uid||enemy.id).join('|'),name:list.length>1?`${list.length} defenders`:list[0].name,armor:list.reduce((sum,enemy)=>sum+enemy.armor,0),attack:list.reduce((sum,enemy)=>sum+enemy.attack,0),fame:list.reduce((sum,enemy)=>sum+enemy.fame,0),traits:[...new Set(list.flatMap(enemy=>enemy.traits||[]))],members:list};};
 const enemyKey=enemy=>enemy.uid||enemy.id;
@@ -210,7 +210,7 @@ const makePlayer=(seed,character='tovak',name)=>{
 export function createGame(seed = 20260901, options = {}) {
   const source = shuffled([...COLORS, 'gold', 'black', ...COLORS], seed + 9).slice(0, 3).map((color, i) => ({ id: `die-${i}`, color, used: false }));
   const character=options.character||'tovak';const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
-  const advancedPool=shuffled(clone(ADVANCED_CARDS),seed+41),spellPool=shuffled(clone(SPELL_CARDS),seed+51),regularUnits=shuffled(clone(UNITS.filter(unit=>!unit.elite)),seed+61),eliteUnits=shuffled(clone(UNITS.filter(unit=>unit.elite)),seed+62);
+  const advancedPool=shuffled(clone(ADVANCED_CARDS),seed+41),spellPool=shuffled(clone(SPELL_CARDS.filter(card=>!options.removeCompetitive||!card.competitive)),seed+51),regularUnits=shuffled(clone(UNITS.filter(unit=>!unit.elite)),seed+61),eliteUnits=shuffled(clone(UNITS.filter(unit=>unit.elite)),seed+62);
   const state = {
     version:5, seed, scenario: 'Solo Conquest', status: 'playing', round: 1, maxRounds:6, time: 'day', turn: 1, phase: options.tactics ? 'tactic' : 'action', tacticsEnabled:Boolean(options.tactics), tactic:null,
     map:prepareMap(Boolean(options.exploration)), tileDeck:shuffled(MAP_TILES.map(tile=>tile.id),seed+23), exploredTiles:[], enemyDecks:createEnemyDecks(seed),enemyDiscards:{brown:[]},explorationEnabled:Boolean(options.exploration), source,
@@ -219,7 +219,7 @@ export function createGame(seed = 20260901, options = {}) {
     player:makePlayer(seed,character),
     skillDeck:shuffled(clone(profile.skills||TOVAK_SKILLS),seed+71), skillChoices:[], commonSkills:[],
     points: freshPoints(), mana: [], sourceTaken: false, combat: null, pendingRewards:[], bonuses:{sideways:null,manaOverload:null}, log: [], error: null,
-    scoring:null,pvp:null,cooperativeAssault:null,scenarioEndTurnsRemaining:null,
+    scoring:null,pvp:null,cooperativeAssault:null,scenarioEndTurnsRemaining:null,removedTactics:{day:[],night:[]},pendingTacticRemoval:null,
   };
   state.player.atTurnStart=!options.tactics;
   setupRuins(state);
@@ -231,7 +231,8 @@ export function createGame(seed = 20260901, options = {}) {
 }
 
 export function createMultiplayerGame(lobby, seed = 20260901) {
-  const state = createGame(seed, { tactics:true,exploration:true });
+  const peaceful=lobby.players.length===1||lobby.scenario==='cooperative-conquest';
+  const state = createGame(seed, { tactics:true,exploration:true,removeCompetitive:peaceful });
   const characterNames = {tovak:'Tovak',arythea:'Arythea',goldyx:'Goldyx',norowas:'Norowas',wolfhawk:'Wolfhawk',krang:'Krang',braevalar:'Braevalar'};
   const individualGames = lobby.players.map((member,index)=>createGame(seed+index*997,{character:member.character}));
   state.version=5;state.multiplayer=true;state.scenario=lobby.scenario;state.maxRounds=lobby.scenario==='blitz-conquest'?4:6;state.phase='tactic';state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=lobby.players.map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];
@@ -241,8 +242,8 @@ export function createMultiplayerGame(lobby, seed = 20260901) {
   const playerCount=lobby.players.length,cityLevels=lobby.scenario==='cooperative-conquest'?(playerCount===1?[5,8]:playerCount===2?[5,5,8]:[5,5,5,11]):lobby.scenario==='blitz-conquest'?Array.from({length:Math.max(2,playerCount)},()=>3):playerCount===1?[5,8]:Array.from({length:playerCount},()=>4),allCities=shuffled(state.map.filter(hex=>hex.site==='city'),seed+211),activeCities=allCities.slice(0,cityLevels.length),activeSet=new Set(activeCities.map(hex=>`${hex.q}:${hex.r}`));allCities.filter(hex=>!activeSet.has(`${hex.q}:${hex.r}`)).forEach(hex=>{hex.site=null;hex.cityColor=null;hex.enemy=null;hex.enemies=[];hex.enemyFaceDown=false;});
   const garrisonPool=[ENEMIES.city,ENEMIES.guards,ENEMIES.mage,ENEMIES.gargoyles,ENEMIES.dragon];activeCities.forEach((hex,index)=>{hex.level=cityLevels[index];hex.finalCity=index===cityLevels.length-1&&new Set(cityLevels).size>1;const count=Math.ceil(hex.level/3)+1;hex.enemies=Array.from({length:count},(_,slot)=>({...clone(garrisonPool[(index+slot)%garrisonPool.length]),uid:`city-${index}-${slot}`}));hex.enemy=enemyGroup(hex.enemies);hex.enemyFaceDown=true;});const spawning=state.map.find(hex=>hex.site==='spawning-grounds');if(spawning){spawning.enemies=[{...clone(ENEMIES.den),uid:'spawn-den'},{...clone(ENEMIES.golem),uid:'spawn-golem'}];spawning.enemy=enemyGroup(spawning.enemies);}
   while(state.offer.units.length<lobby.players.length+2+extra&&state.decks.regularUnits.length)state.offer.units.push(state.decks.regularUnits.shift());
-  state.playerResources=Object.fromEntries(lobby.players.map((member,index)=>[member.id,{skillDeck:individualGames[index].skillDeck,skillChoices:[],commonSkills:[],bonuses:{sideways:null,manaOverload:null},pendingRewards:[]}]))
-  if(lobby.players.length===1||lobby.scenario==='cooperative-conquest'){const unused=Object.keys(CHARACTER_PROFILES).filter(id=>!lobby.players.some(player=>player.character===id)),character=unused[seed%unused.length]||'goldyx',dummyPlayer=makePlayer(seed+7001,character),crystalRows={tovak:['blue','blue','white'],arythea:['red','red','green'],goldyx:['green','green','blue'],norowas:['white','white','green'],wolfhawk:['white','red','green'],krang:['red','blue','green'],braevalar:['green','blue','white']};state.dummy={id:'dummy',character,name:`${CHARACTER_PROFILES[character]?.name||character} dummy`,deck:shuffled([...dummyPlayer.hand,...dummyPlayer.deck],seed+7002),discard:[],crystals:Object.fromEntries(COLORS.map(color=>[color,(crystalRows[character]||[]).filter(item=>item===color).length])),tactic:null};if(lobby.players.length>1)selectDummyTactic(state);}
+  state.playerResources=Object.fromEntries(lobby.players.map((member,index)=>[member.id,{skillDeck:individualGames[index].skillDeck,skillChoices:[],bonuses:{sideways:null,manaOverload:null},pendingRewards:[]}]))
+  if(peaceful){const unused=Object.keys(CHARACTER_PROFILES).filter(id=>!lobby.players.some(player=>player.character===id)),character=unused[seed%unused.length]||'goldyx',dummyPlayer=makePlayer(seed+7001,character),crystalRows={tovak:['blue','blue','white'],arythea:['red','red','green'],goldyx:['green','green','blue'],norowas:['white','white','green'],wolfhawk:['white','red','green'],krang:['red','blue','green'],braevalar:['green','blue','white']};state.dummy={id:'dummy',character,name:`${CHARACTER_PROFILES[character]?.name||character} dummy`,deck:shuffled([...dummyPlayer.hand,...dummyPlayer.deck],seed+7002),discard:[],crystals:Object.fromEntries(COLORS.map(color=>[color,(crystalRows[character]||[]).filter(item=>item===color).length])),skillDeck:shuffled(clone(CHARACTER_PROFILES[character]?.skills||[]),seed+7003),tactic:null};if(lobby.players.length>1)selectDummyTactic(state);}
   bindPlayerState(state,state.players[0].id);state.log=[];log(state,`${state.players.length}-player ${lobby.scenario.replaceAll('-',' ')} begins. Choose Day tactics.`);return state;
 }
 
@@ -250,10 +251,12 @@ function bindPlayerState(state,playerId){
   if(!state.multiplayer)return state.player;
   const player=state.players.find(item=>item.id===playerId);if(!player)return null;
   state.player=player;const resources=state.playerResources[playerId];
-  state.skillDeck=resources.skillDeck;state.skillChoices=resources.skillChoices;state.commonSkills=resources.commonSkills;state.bonuses=resources.bonuses;state.pendingRewards=resources.pendingRewards;return player;
+  state.skillDeck=resources.skillDeck;state.skillChoices=resources.skillChoices;state.bonuses=resources.bonuses;state.pendingRewards=resources.pendingRewards;return player;
 }
 
-function selectDummyTactic(state){if(!state.dummy)return;const taken=new Set(Object.values(state.tacticSelections||{}).map(tactic=>tactic.id)),available=TACTICS[state.time].filter(tactic=>!taken.has(tactic.id));if(!available.length)return;const tactic=available[(state.seed+state.round*43+state.dummy.deck.length)%available.length];state.dummy.tactic=clone(tactic);state.tacticSelections.dummy=clone(tactic);log(state,`The dummy player took tactic ${tactic.number}.`);}
+const availableTactics=state=>TACTICS[state.time].filter(tactic=>!(state.removedTactics?.[state.time]||[]).includes(tactic.id));
+
+function selectDummyTactic(state){if(!state.dummy)return;const taken=new Set(Object.values(state.tacticSelections||{}).map(tactic=>tactic.id)),available=availableTactics(state).filter(tactic=>!taken.has(tactic.id));if(!available.length)return;const tactic=available[(state.seed+state.round*43+state.dummy.deck.length)%available.length];state.dummy.tactic=clone(tactic);state.tacticSelections.dummy=clone(tactic);log(state,`The dummy player took tactic ${tactic.number}.`);}
 
 function takeDummyTurn(state){const dummy=state.dummy;if(!dummy)return false;if(!dummy.deck.length){if(state.roundEndTurnsRemaining===null){state.roundEndTurnsRemaining=state.players.length;log(state,'The dummy player announced the end of the round; every real player has one final turn.');}return true;}const flipped=dummy.deck.splice(0,Math.min(3,dummy.deck.length));dummy.discard.push(...flipped);const color=flipped[flipped.length-1]?.color,extra=Math.min(dummy.crystals[color]||0,dummy.deck.length);if(extra)dummy.discard.push(...dummy.deck.splice(0,extra));log(state,`The dummy player discarded ${flipped.length+extra} cards${color?` after revealing ${color}`:''}; ${dummy.deck.length} remain.`);return false;}
 
@@ -308,7 +311,7 @@ function gainFame(state, amount) {
   const old = state.player.level; state.player.fame += amount;if(state.scenario==='blitz-conquest'){let previous=old,current=levelFor(state.player.fame);while(current>previous){state.player.fame+=current-previous;previous=current;current=levelFor(state.player.fame);}}state.player.level = levelFor(state.player.fame);
   for(let level=old+1;level<=state.player.level;level++) {
     if(level%2===1){state.player.command++;state.player.armor++;}
-    else if(state.skillDeck.length){lockUndo(state,'New Skill choices were revealed.');state.skillChoices.splice(0,state.skillChoices.length,...state.skillDeck.splice(0,Math.min(2,state.skillDeck.length)));}
+    else if(state.skillDeck.length){lockUndo(state,'New Skill choices were revealed.');state.skillChoices.splice(0,state.skillChoices.length,...state.skillDeck.splice(0,Math.min(2,state.skillDeck.length)));if(state.multiplayer&&state.players.length===1&&state.dummy?.skillDeck?.length){const dummySkill=state.dummy.skillDeck.shift();state.commonSkills.push(dummySkill);log(state,`${state.dummy.name} added ${dummySkill.name} to the Common Skills offer.`);}}
     log(state, `Level up! You reached level ${level}${level%2===0?' and may choose a Skill.':'.'}`);
   }
 }
@@ -359,9 +362,12 @@ export function reduceGame(input, action) {
     case 'UNASSIGN_BANNER': {
       if(state.multiplayer)bindPlayerState(state,action.playerId);if(state.phase!=='tactic'&&!(state.phase==='action'&&state.player.atTurnStart))return fail(state,'A Banner may be detached only while preparing a round or at the start of your turn.');const unit=state.player.units.find(item=>item.id===action.unitId);if(!unit?.banner)return fail(state,'That Unit has no Banner.');state.player.discard.push(unit.banner);log(state,`${unit.banner.name} was detached from ${unit.name}.`);unit.banner=null;return state;
     }
+    case 'REMOVE_TACTIC': {
+      if(state.phase!=='tactic-removal'||!state.pendingTacticRemoval?.includes(action.id))return fail(state,'Choose one of the real players’ used tactics.');state.removedTactics[state.time].push(action.id);state.pendingTacticRemoval=null;log(state,`Tactic ${action.id} was removed from future ${state.time} rounds.`);return advanceRound(state);
+    }
     case 'SELECT_TACTIC': {
       if(state.phase!=='tactic'||!state.tacticsEnabled)return fail(state,'Tactics are chosen only at the start of a round.');
-      const tactic=TACTICS[state.time].find(item=>item.id===action.id);if(!tactic)return fail(state,`That is not a ${state.time} tactic.`);
+      const tactic=TACTICS[state.time].find(item=>item.id===action.id);if(!tactic)return fail(state,`That is not a ${state.time} tactic.`);if(!availableTactics(state).some(item=>item.id===action.id))return fail(state,`That ${state.time} tactic is unavailable.`);
       if(state.multiplayer){
         if(action.playerId!==state.tacticPickerId)return fail(state,'Players choose tactics from lowest Fame upward. Wait for your pick.');
         if(state.tacticSelections[action.playerId])return fail(state,'You already chose a tactic this round.');
@@ -373,8 +379,8 @@ export function reduceGame(input, action) {
     }
     case 'USE_TACTIC': {const result=activateTactic(state,action);if(!result.error)result.player.atTurnStart=false;return result;}
     case 'SELECT_SKILL': {
-      const skill=state.skillChoices.find(s=>s.id===action.id); if(!skill)return fail(state,'That Skill is not currently offered.');
-      state.player.skills.push({...skill,used:false}); state.commonSkills.push(...state.skillChoices.filter(s=>s.id!==action.id)); state.skillChoices.splice(0);
+      const ownSkill=state.skillChoices.find(s=>s.id===action.id),commonSkill=state.commonSkills.find(s=>s.id===action.id),skill=ownSkill||commonSkill;if(!skill)return fail(state,'That Skill is not currently offered.');
+      state.player.skills.push({...skill,used:false});if(commonSkill){state.commonSkills=state.commonSkills.filter(s=>s.id!==action.id);state.commonSkills.push(...state.skillChoices);}else state.commonSkills.push(...state.skillChoices.filter(s=>s.id!==action.id));state.skillChoices.splice(0);
       const advanced=state.offer.advanced.shift(); if(advanced)state.player.deck.unshift(cardWithUid(advanced,state));
       if(state.decks.advanced.length)state.offer.advanced.push(state.decks.advanced.shift());
       log(state,`Learned ${skill.name}${advanced?` and gained ${advanced.name}`:''}.`); return state;
@@ -797,7 +803,16 @@ function refreshOffers(state){
   (state.offer.monastery||[]).forEach(card=>state.decks.advanced.push(card));state.offer.monastery=[];const monasteries=state.map.filter(hex=>hex.revealed!==false&&hex.site==='monastery'&&!hex.burned).length;for(let index=0;index<monasteries&&state.decks.advanced.length;index++)state.offer.monastery.push(state.decks.advanced.shift());
 }
 
-function nextRound(state) {
+function nextRound(state){
+  if(state.multiplayer&&state.dummy&&state.round<(state.maxRounds||6)){
+    const used=state.players.map(player=>player.tactic?.id).filter(Boolean),dummyId=state.dummy.tactic?.id;
+    if(state.players.length===1){state.removedTactics[state.time]=[...new Set([...(state.removedTactics[state.time]||[]),...used,...(dummyId?[dummyId]:[])])];}
+    else if(state.scenario==='cooperative-conquest'&&used.length){state.pendingTacticRemoval=[...new Set(used)];state.phase='tactic-removal';state.activePlayerId=state.players[0].id;bindPlayerState(state,state.activePlayerId);state.undoCheckpoint=null;state.undoBlockedReason='The round has ended.';log(state,'The host must remove one tactic used by a real player before the next round.');return state;}
+  }
+  return advanceRound(state);
+}
+
+function advanceRound(state) {
   if(state.round>=(state.maxRounds||6)){state.status='lost';state.scoring=calculateScore(state);log(state,'The final Night ends before the cities are conquered. Final scoring is complete.');return state;}
   state.undoCheckpoint=null;state.undoBlockedReason=null;state.round++; state.time=state.time==='day'?'night':'day';if(state.time==='day')state.map.filter(hex=>hex.site==='ruins'&&hex.ruinsToken).forEach(hex=>{hex.ruinsToken.faceDown=false;});revealVisibleGarrisons(state);refreshOffers(state);
   if(state.multiplayer){
