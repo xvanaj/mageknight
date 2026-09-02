@@ -18,6 +18,7 @@ function GameComponent({session,onLeaveGame,multiplayerGame,onGameAction,network
   const game=multiplayerGame||localGame;
   const [rulesOpen,setRulesOpen]=useState(false);
   const [sideways,setSideways]=useState(null);
+  const [challengeIds,setChallengeIds]=useState([]);
   const dispatch = action => onGameAction?onGameAction(action):setLocalGame(old => reduceGame(old, action));
   const moves = useMemo(() => new Map(legalMoves(game).map(h=>[`${h.q},${h.r}`,h])),[game]);
   const explorations=useMemo(()=>new Map(legalExplorations(game).map(item=>[item.tileId,item])),[game]);
@@ -52,7 +53,7 @@ function GameComponent({session,onLeaveGame,multiplayerGame,onGameAction,network
 
       <section className="board-panel panel">
         <div className="board-heading"><div><span className="eyebrow">Atlantean Empire</span><h2>{here ? `${siteNames[here.site]||here.terrain} · ${here.q}, ${here.r}`:'Wilderness'}</h2></div><div className="legend"><span><i className="dot legal"/>reachable</span><span><i className="dot hostile"/>hostile</span></div></div>
-        <HexMap game={game} moves={moves} onHex={hexClick} onCombat={(h)=>dispatch({type:'START_COMBAT',q:h.q,r:h.r})}/>
+        <HexMap game={game} moves={moves} onHex={hexClick} onCombat={(h)=>{dispatch({type:'START_COMBAT',q:h.q,r:h.r,challengeIds});setChallengeIds([]);}}/>
         {game.error&&<div className="toast error"><b>Illegal action</b>{game.error}<button onClick={()=>dispatch({type:'CLEAR_ERROR'})}>×</button></div>}
         {game.status!=='playing'&&<div className={`end-banner ${game.status}`}><h2>{game.status==='won'?'Conquest complete':'Time has run out'}</h2><p>{game.scoring?`Final party score: ${game.scoring.teamTotal}`:'Final scoring is ready.'}</p>{game.scoring?.players.map(row=><p key={row.playerId||row.name}><b>{row.name}: {row.total}</b> · Fame {row.fame} · Wound penalty {row.categories.wounds}</p>)}<button onClick={fresh}>Play again</button></div>}
         {game.multiplayer&&game.phase!=='tactic'&&game.viewerPlayerId!==game.activePlayerId&&<div className="turn-wait"><span className="eyebrow">Waiting for player</span><h2>{game.players.find(player=>player.id===game.activePlayerId)?.name}'s turn</h2><p>You see every shared action live. Your hand remains private until your turn.</p><small>{networkStatus}</small></div>}
@@ -60,7 +61,7 @@ function GameComponent({session,onLeaveGame,multiplayerGame,onGameAction,network
 
       <aside className="turn-panel panel">
         <span className="eyebrow">Current phase</span><h2>{phaseName(game.phase)}</h2>
-        {game.phase==='team-assault'?<TeamAssault game={game} dispatch={dispatch}/>:game.phase?.startsWith('pvp-')?<PvpPanel game={game} dispatch={dispatch}/>:combat?<Combat game={game} dispatch={dispatch}/>:game.pendingRewards.length?<RewardPanel game={game} dispatch={dispatch}/>:<ActionPanel game={game} here={here} dispatch={dispatch}/>}
+        {game.phase==='team-assault'?<TeamAssault game={game} dispatch={dispatch}/>:game.phase?.startsWith('pvp-')?<PvpPanel game={game} dispatch={dispatch}/>:combat?<Combat game={game} dispatch={dispatch}/>:game.pendingRewards.length?<RewardPanel game={game} dispatch={dispatch}/>:<ActionPanel game={game} here={here} dispatch={dispatch} challengeIds={challengeIds} setChallengeIds={setChallengeIds}/>}
         <Section title="Mana source"><div className="source">{game.source.map(d=><button disabled={game.sourceTaken||(d.color==='black'&&game.time==='day')} className={`source-die ${d.color}`} onClick={()=>dispatch({type:'TAKE_SOURCE',id:d.id})} key={d.id}><span>◆</span><small>{d.color}</small></button>)}</div><p className="hint">One die per turn. Gold is wild by day; black powers spells at night.</p></Section>
         <Section title="Turn log"><div className="log">{game.log.map((l,i)=><p key={i}><span>R{l.round} T{l.turn}</span>{l.message}</p>)}</div></Section>
       </aside>
@@ -144,12 +145,13 @@ function PvpPanel({game,dispatch}){const duel=game.pvp,mine=game.viewerPlayerId|
     {duel.stage==='damage'&&!amCurrent&&<p className="hint">The attacker is assigning damage to your Hero or Units.</p>}
   </div>}
 
-function ActionPanel({game,here,dispatch}){
+function ActionPanel({game,here,dispatch,challengeIds,setChallengeIds}){
   const [endDiscards,setEndDiscards]=useState([]);
   const emptyFinalTurn=game.multiplayer&&game.roundEndTurnsRemaining!==null&&!game.player.hand.length,canEndRound=!game.player.deck.length&&game.player.atTurnStart&&(game.roundEndTurnsRemaining===null||emptyFinalTurn),woundCards=game.player.hand.filter(card=>card.id==='wound'),restCards=game.player.hand.filter(card=>card.id!=='wound');const city=here?.site==='city'&&here.conquered;
   const validEndDiscards=endDiscards.filter(uid=>restCards.some(card=>card.uid===uid)),mustDiscard=!game.player.cardsPlayedThisTurn&&!game.player.emptyHandPassAllowed;
   const toggleEndDiscard=uid=>setEndDiscards(old=>old.includes(uid)?old.filter(item=>item!==uid):[...old,uid]);
   const recruits=game.offer.units.filter(u=>(city&&here.cityColor==='white')||u.sites.includes(here?.site)||(city&&u.sites.includes('city')));
+  const assaultTargets=game.map.filter(hex=>hex.revealed!==false&&hex.enemy&&SITES[hex.site]?.kind==='fortified'&&hexDistance(game.player,hex)===1),challengeable=game.map.filter(hex=>hex.revealed!==false&&hex.enemy&&['rampaging','draconum'].includes(hex.site)&&assaultTargets.some(target=>hexDistance(hex,target)===1));
   return <div className="actions"><p className="phase-help">{here?.site?<><b>{siteNames[here.site]}</b> — {SITES[here.site].rule}</>:'Play cards, move, interact, or end your turn.'}</p>
     {game.player.tactic&&!game.player.tacticUsed&&<TacticAction game={game} dispatch={dispatch}/>}
     {SITES[here?.site]?.kind==='adventure'&&here.enemy&&<button className="danger-action" onClick={()=>dispatch({type:'START_COMBAT',q:here.q,r:here.r})}>Explore {siteNames[here.site]}<span>Fight {here.enemy.name}</span></button>}
@@ -165,6 +167,7 @@ function ActionPanel({game,here,dispatch}){
     {game.player.wounds>0&&game.points.heal>0&&<button onClick={()=>dispatch({type:'SPEND_HEAL'})}>Heal Hero Wound<span>1 Heal</span></button>}{game.player.units.filter(unit=>unit.wounded&&game.points.heal>=(unit.level||1)).map(unit=><button key={`heal-${unit.id}`} onClick={()=>dispatch({type:'SPEND_HEAL',unitId:unit.id})}>Heal {unit.name}<span>{unit.level||1} Heal</span></button>)}
     {game.multiplayer&&game.scenario==='cooperative-conquest'&&game.map.filter(hex=>hex.revealed!==false&&hex.site==='city'&&hex.enemy&&hexDistance(game.player,hex)===1).map(hex=><button className="danger-action" key={`${hex.q}:${hex.r}`} onClick={()=>dispatch({type:'START_COOPERATIVE_ASSAULT',q:hex.q,r:hex.r})}>Joint assault: {hex.cityColor} city<span>Adjacent allies may contribute</span></button>)}
     {game.multiplayer&&game.scenario!=='cooperative-conquest'&&game.players.filter(player=>player.id!==game.player.id&&hexDistance(game.player,player)===1).map(player=><button className="danger-action" key={player.id} onClick={()=>dispatch({type:'INITIATE_PVP',targetId:player.id})}>Challenge {player.name}<span>Start player-versus-player combat</span></button>)}
+    {challengeable.length>0&&<div className="card-choice discard-choice"><span>Rampagers to challenge during your next fortified assault</span>{challengeable.map(hex=>{const id=hex.enemy.uid||hex.enemy.id,mayBeProvoked=hexDistance(game.player,hex)===1;return <button className={challengeIds.includes(id)?'selected':''} key={`challenge-${id}`} onClick={()=>setChallengeIds(old=>old.includes(id)?old.filter(item=>item!==id):[...old,id])}>{challengeIds.includes(id)?'✓ challenged':mayBeProvoked?'automatic when provoked · optional otherwise':'optional'} · {hex.enemy.name}</button>})}</div>}
     {restCards.length?restCards.flatMap(card=>Array.from({length:woundCards.length+1},(_,count)=><button key={`rest-${card.uid}-${count}`} onClick={()=>dispatch({type:'REST',cardUid:card.uid,woundUids:woundCards.slice(0,count).map(item=>item.uid)})}>Rest with {card.name}<span>Discard this card{count?` and ${count} Wound${count===1?'':'s'}`:''} · no movement or action</span></button>)):woundCards.slice(0,1).map(card=><button key={`recover-${card.uid}`} onClick={()=>dispatch({type:'REST',woundUid:card.uid})}>Slow recovery<span>Discard one Wound · no movement or action</span></button>)}
     {!canEndRound&&<div className="card-choice discard-choice"><span>{mustDiscard?'Choose at least one card to discard because none was played':'Optional end-of-turn discards'}</span>{restCards.map(card=><button className={validEndDiscards.includes(card.uid)?'selected':''} key={`end-${card.uid}`} onClick={()=>toggleEndDiscard(card.uid)}>{validEndDiscards.includes(card.uid)?'✓ ':''}{card.name}</button>)}</div>}
     <button className="primary" disabled={!canEndRound&&mustDiscard&&!validEndDiscards.length} onClick={()=>{dispatch(canEndRound?{type:'END_ROUND'}:{type:'END_TURN',discardUids:validEndDiscards});setEndDiscards([]);}}>{canEndRound?(emptyFinalTurn?'Forfeit empty turn':'End round'):'End turn'}<span>{canEndRound?(emptyFinalTurn?'The round was already announced':'Announce and begin final turns'):`${validEndDiscards.length?`Discard ${validEndDiscards.length} selected · `:''}discard played · draw up`}</span></button></div>
