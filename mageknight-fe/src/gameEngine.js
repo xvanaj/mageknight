@@ -300,7 +300,8 @@ const movementCost=(state,hex)=>hex?.site==='city'?2:TERRAIN_COST[state.time][he
 const isSafeSpace=(state,player,hex)=>{if(!hex||!Number.isFinite(TERRAIN_COST[state.time][hex.terrain]))return false;const identity=player.id||player.character,fortified=SITES[hex.site]?.kind==='fortified';if((fortified&&!hex.conquered)||(hex.site==='keep'&&hex.conquered&&hex.ownerId!==identity))return false;const sharedAllowed=hex.site==='portal'||(hex.site==='city'&&hex.conquered);return sharedAllowed||!(state.players||[]).some(other=>other.id!==player.id&&other.q===hex.q&&other.r===hex.r);};
 const cardWithUid = (card,state) => ({...clone(card),uid:`${card.id}-${state.turn}-${state.player.deck.length}-${state.player.discard.length}`});
 const resistanceCount = enemy => ['physical-resistant','fire-resistant','ice-resistant'].filter(t=>enemy.traits.includes(t)).length;
-const isUnderground = state => Boolean(SITES[currentHex(state)?.site]?.underground);
+const isUndergroundCombat = state => Boolean(state.combat&&SITES[state.map.find(hex=>hex.q===state.combat.q&&hex.r===state.combat.r)?.site]?.underground);
+const effectiveTime = state => isUndergroundCombat(state)?'night':state.time;
 function addEffect(state, effect, sidewaysAs, choices={}) {
   if (sidewaysAs) {
     const boosted=state.bonuses.sideways;
@@ -330,11 +331,11 @@ function spendMana(state, color) {
   let i = state.mana.indexOf(color);
   if (i >= 0) { state.mana.splice(i, 1); return true; }
   i = state.mana.indexOf('gold');
-  if (state.time === 'day' && i >= 0) { state.mana.splice(i, 1); return true; }
+  if (effectiveTime(state) === 'day' && i >= 0) { state.mana.splice(i, 1); return true; }
   if (state.player.crystals[color] > 0) { state.player.crystals[color]--; return true; }
   return false;
 }
-const canSpendMana=(state,color)=>state.mana.includes(color)||(state.time==='day'&&state.mana.includes('gold'))||(state.player.crystals[color]||0)>0;
+const canSpendMana=(state,color)=>state.mana.includes(color)||(effectiveTime(state)==='day'&&state.mana.includes('gold'))||(state.player.crystals[color]||0)>0;
 function gainFame(state, amount) { state.player.fame+=amount; }
 function advanceLevels(state){
   let target=levelFor(state.player.fame);while(state.player.level<target){const level=++state.player.level;if(state.scenario==='blitz-conquest'){state.player.fame++;target=levelFor(state.player.fame);}if(level%2===1){state.player.command++;state.player.armor++;}else if(state.skillDeck.length){lockUndo(state,'New Skill choices were revealed.');state.skillChoices.splice(0,state.skillChoices.length,...state.skillDeck.splice(0,Math.min(2,state.skillDeck.length)));if(state.multiplayer&&state.players.length===1&&state.dummy?.skillDeck?.length){const dummySkill=state.dummy.skillDeck.shift();state.commonSkills.push(dummySkill);log(state,`${state.dummy.name} added ${dummySkill.name} to the Common Skills offer.`);}log(state,`Level up! You reached level ${level} and must choose a Skill.`);return true;}log(state,`Level up! You reached level ${level}.`);}return false;
@@ -435,8 +436,8 @@ export function reduceGame(input, action) {
     case 'TAKE_SOURCE': {
       if (state.sourceTaken) return fail(state, 'Only one Source die may be used per turn.');
       const die = state.source.find(d => d.id === action.id); if (!die) return fail(state, 'Unknown Source die.');
-      if (die.color === 'black' && state.time === 'day') return fail(state, 'Black mana cannot be used during the Day.');
-      if (die.color === 'gold' && state.time === 'night') return fail(state, 'Gold mana cannot be used during the Night.');
+      if (die.color === 'black' && effectiveTime(state) === 'day') return fail(state, 'Black mana cannot be used during the Day.');
+      if (die.color === 'gold' && effectiveTime(state) === 'night') return fail(state, 'Gold mana cannot be used during the Night.');
       lockUndo(state,'A Source die was rerolled.');state.mana.push(die.color); state.sourceTaken = true;state.player.atTurnStart=false;
       const faces = [...COLORS,'gold','black']; die.color = faces[(state.seed + state.turn * 7 + Number(die.id.slice(-1))) % faces.length];
       log(state, `Took ${state.mana[state.mana.length-1]} mana from the Source.`); return state;
@@ -458,7 +459,7 @@ export function reduceGame(input, action) {
         if (!offeredStats.some(k => combatStat.includes(k))) return fail(state, `Only ${combatStat.join(' or ')} effects may be committed in this combat phase.`);
       }
       if(card.type==='spell'){
-        if(action.mode==='sideways'){}else if(action.mode==='basic'){if(!canSpendMana(state,card.color))return fail(state,`Casting this Spell requires ${card.color} mana.`);spendMana(state,card.color);}else if(action.mode==='strong'){if(state.time!=='night')return fail(state,'The strong Spell effect can only be cast at Night.');if(!canSpendMana(state,card.color)||!state.mana.includes('black'))return fail(state,`The strong Spell requires ${card.color} and black mana.`);spendMana(state,card.color);state.mana.splice(state.mana.indexOf('black'),1);}else return fail(state,'Choose a Spell effect.');
+        if(action.mode==='sideways'){}else if(action.mode==='basic'){if(!canSpendMana(state,card.color))return fail(state,`Casting this Spell requires ${card.color} mana.`);spendMana(state,card.color);}else if(action.mode==='strong'){if(effectiveTime(state)!=='night')return fail(state,'The strong Spell effect can only be cast at Night.');if(!canSpendMana(state,card.color)||!state.mana.includes('black'))return fail(state,`The strong Spell requires ${card.color} and black mana.`);spendMana(state,card.color);state.mana.splice(state.mana.indexOf('black'),1);}else return fail(state,'Choose a Spell effect.');
       } else if(card.type!=='artifact'&&action.mode==='strong'&&!spendMana(state,card.color))return fail(state,`The strong action requires ${card.color} mana.`);
       if (action.mode === 'sideways' && !['move','influence','attack','block'].includes(action.as)) return fail(state, 'A sideways card provides Move, Influence, Attack, or Block 1.');
       if(action.mode==='sideways'&&state.bonuses.sideways?.advancedValue&&['advanced','spell','artifact'].includes(card.type))state.bonuses.sideways.value=state.bonuses.sideways.advancedValue;
@@ -469,7 +470,7 @@ export function reduceGame(input, action) {
     case 'DISCARD_CARD': return fail(state,'Cards are selected for discard only while ending the turn.');
     case 'USE_UNIT': {
       const unit = state.player.units.find(u => u.id === action.id); if (!unit || unit.spent||unit.wounded) return fail(state, 'That unit is unavailable or wounded.');
-      if(state.combat && SITES[state.map.find(h=>h.q===state.combat.q&&h.r===state.combat.r)?.site]?.underground)return fail(state,'Units cannot be used in a Dungeon or Tomb.');
+      if(isUndergroundCombat(state))return fail(state,'Units cannot be used in a Dungeon or Tomb.');
       if(!['action','cooperative-entry','combat-ranged','combat-block','combat-attack'].includes(state.phase))return fail(state,'That Unit cannot be activated in this phase.');
       const abilities=legalUnitAbilities(unit,state.phase);if(!abilities.length)return fail(state,`That Unit has no ability usable in the ${state.phase.replace('combat-','')} phase.`);
       if(abilities.length>1&&!abilities.includes(action.abilityAs))return fail(state,'Choose which Unit ability to activate.');
@@ -479,7 +480,7 @@ export function reduceGame(input, action) {
       if(state.phase!=='action')return fail(state,'Assign Banners during your turn.');const index=state.player.hand.findIndex(card=>card.uid===action.uid&&isBanner(card)),unit=state.player.units.find(item=>item.id===action.unitId);if(index<0)return fail(state,'That Banner is not in your hand.');if(!unit)return fail(state,'Choose one of your Units.');if(unit.banner)state.player.discard.push(unit.banner);unit.banner={...state.player.hand.splice(index,1)[0],used:false};state.player.atTurnStart=false;log(state,`${unit.banner.name} was assigned to ${unit.name}.`);return state;
     }
     case 'USE_BANNER': {
-      if(!['action','combat-ranged','combat-block','combat-attack'].includes(state.phase))return fail(state,'That Banner cannot be used in this phase.');const unit=state.player.units.find(item=>item.id===action.unitId);if(!unit?.banner||unit.banner.used||unit.wounded)return fail(state,'That Unit’s Banner is unavailable.');addEffect(state,unit.banner.basic||{},null,action);unit.banner.used=true;state.player.atTurnStart=false;log(state,`${unit.name} used ${unit.banner.name}.`);return state;
+      if(!['action','combat-ranged','combat-block','combat-attack'].includes(state.phase))return fail(state,'That Banner cannot be used in this phase.');if(isUndergroundCombat(state))return fail(state,'Units and their Banners cannot be used in a Dungeon or Tomb.');const unit=state.player.units.find(item=>item.id===action.unitId);if(!unit?.banner||unit.banner.used||unit.wounded)return fail(state,'That Unit’s Banner is unavailable.');addEffect(state,unit.banner.basic||{},null,action);unit.banner.used=true;state.player.atTurnStart=false;log(state,`${unit.name} used ${unit.banner.name}.`);return state;
     }
     case 'MOVE': {
       if (state.phase !== 'action') return fail(state, 'Finish combat before moving.');if(state.player.turnAction)return fail(state,'Movement must happen before your turn action.');
@@ -568,7 +569,7 @@ export function reduceGame(input, action) {
     }
     case 'FINISH_BLOCK': if(state.phase!=='combat-block')return fail(state,'Not in the Block phase.');return finishBlockPhase(state);
     case 'ASSIGN_DAMAGE_UNIT': {
-      if(state.phase!=='combat-damage'||!state.combat)return fail(state,'Choose Units while assigning one enemy attack.');const unit=state.player.units.find(item=>item.id===action.id);if(!unit||unit.wounded||(state.combat.damageAssignedUnitIds||[]).includes(action.id))return fail(state,'Only an unwounded unit not already assigned in this combat can receive damage.');state.combat.damageUnits=state.combat.damageUnits||[];const index=state.combat.damageUnits.indexOf(unit.id);if(index>=0)state.combat.damageUnits.splice(index,1);else state.combat.damageUnits.push(unit.id);return state;
+      if(state.phase!=='combat-damage'||!state.combat)return fail(state,'Choose Units while assigning one enemy attack.');if(isUndergroundCombat(state))return fail(state,'Units cannot enter a Dungeon or Tomb to receive damage.');const unit=state.player.units.find(item=>item.id===action.id);if(!unit||unit.wounded||(state.combat.damageAssignedUnitIds||[]).includes(action.id))return fail(state,'Only an unwounded unit not already assigned in this combat can receive damage.');state.combat.damageUnits=state.combat.damageUnits||[];const index=state.combat.damageUnits.indexOf(unit.id);if(index>=0)state.combat.damageUnits.splice(index,1);else state.combat.damageUnits.push(unit.id);return state;
     }
     case 'SELECT_DAMAGE_ENEMY': {
       if(state.phase!=='combat-damage'||!state.combat?.damageQueue?.length)return fail(state,'There is no enemy attack awaiting damage assignment.');const index=state.combat.damageQueue.findIndex(enemy=>enemyKey(enemy)===action.targetId);if(index<0)return fail(state,'Choose an unblocked enemy attack.');const [enemy]=state.combat.damageQueue.splice(index,1);state.combat.damageQueue.unshift(enemy);state.combat.damageUnits=[];return state;
@@ -626,7 +627,7 @@ function activateSkill(state,action){
   if(skill.used||skill.roundUsed)return fail(state,`${skill.name} has already been used ${skill.cadence==='round'?'this round':'this turn'}.`);
   const mark=()=>{if(skill.cadence==='round')skill.roundUsed=true;else skill.used=true;log(state,`${skill.name} activated.`);return state;};
   if(skill.id==='double-time'){if(!['action','cooperative-entry'].includes(state.phase))return fail(state,'Double Time is used outside combat.');state.points.move+=state.time==='day'?2:1;return mark();}
-  if(skill.id==='night-sharpshooting'){if(!['combat-ranged','combat-attack'].includes(state.phase))return fail(state,'Night Sharpshooting is a combat Skill.');state.points.ranged+=(state.time==='night'||isUnderground(state))?2:1;return mark();}
+  if(skill.id==='night-sharpshooting'){if(!['combat-ranged','combat-attack'].includes(state.phase))return fail(state,'Night Sharpshooting is a combat Skill.');state.points.ranged+=effectiveTime(state)==='night'?2:1;return mark();}
   if(skill.id==='cold-swordsmanship'){if(state.phase!=='combat-attack')return fail(state,'Cold Swordsmanship is used in the Attack phase.');if(action.mode==='ice')state.points.iceAttack+=2;else state.points.attack+=2;return mark();}
   if(skill.id==='shield-mastery'){if(state.phase!=='combat-block')return fail(state,'Shield Mastery is used in the Block phase.');if(action.mode==='ice')state.points.iceBlock+=2;else if(action.mode==='fire')state.points.fireBlock+=2;else state.points.block+=3;return mark();}
   if(skill.id==='resistance-break'){if(!state.combat)return fail(state,'Resistance Break requires an enemy in combat.');const reduction=resistanceCount(state.combat.enemy);if(!reduction)return fail(state,'That enemy has no resistance to break.');state.combat.enemy.armor=Math.max(1,state.combat.enemy.armor-reduction);return mark();}
