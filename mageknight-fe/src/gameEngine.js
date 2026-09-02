@@ -645,13 +645,13 @@ const pvpManaPool=(state,actor)=>actor.id===state.pvp.defenderId?(state.pvp.defe
 const canSpendPvpMana=(state,actor,color)=>{const pool=pvpManaPool(state,actor);return pool.includes(color)||(state.time==='day'&&pool.includes('gold'))||(actor.crystals[color]||0)>0;};
 const spendPvpMana=(state,actor,color)=>{const pool=pvpManaPool(state,actor);let index=pool.indexOf(color);if(index>=0){pool.splice(index,1);return true;}index=pool.indexOf('gold');if(state.time==='day'&&index>=0){pool.splice(index,1);return true;}if((actor.crystals[color]||0)>0){actor.crystals[color]--;return true;}return false;};
 const addPvpWounds=(state,actor,count)=>{actor.wounds+=count;for(let index=0;index<count;index++)actor.hand.push({id:'wound',uid:`pvp-wound-${state.turn}-${actor.id}-${index}-${actor.wounds}`,name:'Wound',color:'wound',basic:{},strong:{}});};
-const pvpRetreatHexes=(state,playerId)=>{const player=playerById(state,playerId);return state.map.filter(hex=>hex.revealed!==false&&distance(player,hex)===1&&!hex.enemy&&Number.isFinite(movementCost(state,hex))&&!state.players.some(other=>other.id!==playerId&&other.q===hex.q&&other.r===hex.r));};
+const pvpRetreatHexes=(state,playerId)=>{const player=playerById(state,playerId);return state.map.filter(hex=>hex.revealed!==false&&distance(player,hex)===1&&!hex.enemy&&isSafeSpace(state,player,hex));};
 
 function resetPvpExchange(state,nextAttackerId){const pvp=state.pvp;pvp.currentAttackerId=nextAttackerId;pvp.stage='attack';pvp.attackPower=0;pvp.attackElements=[];pvp.blockPower=0;pvp.blockTypes={physical:0,fire:0,ice:0,coldfire:0};pvp.damageRemaining=0;pvp.passes=0;}
 function finishPvpAttack(state){const pvp=state.pvp,previous=pvp.currentAttackerId;resetPvpExchange(state,pvpOpponentId(pvp,previous));log(state,`${playerById(state,previous).name}'s PvP attack is complete; roles switch.`);return state;}
 
 function finishPvpCombat(state,retreatingId,winnerId=null){
-  const pvp=state.pvp,retreating=playerById(state,retreatingId),winner=winnerId&&playerById(state,winnerId);if(winner){const fame=(retreating.fame>winner.fame?1:0)+Math.max(0,retreating.level-winner.level)*2;bindPlayerState(state,winner.id);if(fame)gainFame(state,fame);winner.pvpWins=(winner.pvpWins||0)+1;}
+  const pvp=state.pvp,retreating=playerById(state,retreatingId),winner=winnerId&&playerById(state,winnerId);if(winner){const levelGap=Math.max(0,retreating.level-winner.level),fame=levelGap?1+levelGap*2:(retreating.fame>winner.fame?1:0);bindPlayerState(state,winner.id);if(fame)gainFame(state,fame);winner.pvpWins=(winner.pvpWins||0)+1;}
   finishPvpReaction(state,pvp);bindPlayerState(state,pvp.attackerId);state.pvp=null;state.phase='action';log(state,winner?`${winner.name} forced ${retreating.name} to withdraw from PvP.`:`${retreating.name} withdrew after both players passed.`);return state;
 }
 
