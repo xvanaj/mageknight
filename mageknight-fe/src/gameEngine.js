@@ -375,16 +375,17 @@ export function reduceGame(input, action) {
         if(action.playerId!==state.tacticPickerId)return fail(state,'Players choose tactics from lowest Fame upward. Wait for your pick.');
         if(state.tacticSelections[action.playerId])return fail(state,'You already chose a tactic this round.');
         if(Object.values(state.tacticSelections).some(selection=>selection.id===tactic.id))return fail(state,'Another player already chose that tactic.');
-        state.tacticSelections[action.playerId]=clone(tactic);state.player.tactic=clone(tactic);state.player.tacticUsed=false;applyTacticOnTake(state,tactic);log(state,`${state.player.name} chose ${tactic.name} (initiative ${tactic.number}).`);
+        if(tactic.effect==='prepare'&&!state.player.deck.some(card=>card.uid===action.cardUid))return fail(state,'Choose a card from your Deed deck for Preparation.');state.tacticSelections[action.playerId]=clone(tactic);state.player.tactic=clone(tactic);state.player.tacticUsed=false;applyTacticOnTake(state,tactic,action);log(state,`${state.player.name} chose ${tactic.name} (initiative ${tactic.number}).`);
         const realSelections=state.players.filter(player=>state.tacticSelections[player.id]).length;if(realSelections===state.players.length){if(state.dummy&&!state.tacticSelections.dummy)selectDummyTactic(state);state.turnOrder=[...state.players.map(player=>player.id),...(state.dummy?['dummy']:[])].sort((a,b)=>state.tacticSelections[a].number-state.tacticSelections[b].number);state.tacticPickerId=null;let firstIndex=0;if(state.turnOrder[firstIndex]==='dummy'){takeDummyTurn(state);firstIndex=(firstIndex+1)%state.turnOrder.length;}state.activePlayerId=state.turnOrder[firstIndex];bindPlayerState(state,state.activePlayerId);state.player.atTurnStart=true;state.player.emptyHandPassAllowed=!state.player.hand.length&&Boolean(state.player.deck.length);state.phase='action';log(state,`${state.player.name} has the first real turn.`);checkpointTurn(state);}else state.tacticPickerId=state.tacticPickOrder.find(id=>!state.tacticSelections[id]);return state;
       }
-      state.tactic=clone(tactic);state.player.tactic=clone(tactic);state.player.tacticUsed=false;applyTacticOnTake(state,tactic);state.player.atTurnStart=true;state.player.emptyHandPassAllowed=!state.player.hand.length&&Boolean(state.player.deck.length);state.phase='action';log(state,`${state.player.name} chose ${tactic.name} (initiative ${tactic.number}).`);checkpointTurn(state);return state;
+      if(tactic.effect==='prepare'&&!state.player.deck.some(card=>card.uid===action.cardUid))return fail(state,'Choose a card from your Deed deck for Preparation.');state.tactic=clone(tactic);state.player.tactic=clone(tactic);state.player.tacticUsed=false;applyTacticOnTake(state,tactic,action);state.player.atTurnStart=true;state.player.emptyHandPassAllowed=!state.player.hand.length&&Boolean(state.player.deck.length);state.phase='action';log(state,`${state.player.name} chose ${tactic.name} (initiative ${tactic.number}).`);checkpointTurn(state);return state;
     }
     case 'USE_TACTIC': {const result=activateTactic(state,action);if(!result.error)result.player.atTurnStart=false;return result;}
     case 'SELECT_SKILL': {
       const ownSkill=state.skillChoices.find(s=>s.id===action.id),commonSkill=state.commonSkills.find(s=>s.id===action.id),skill=ownSkill||commonSkill;if(!skill)return fail(state,'That Skill is not currently offered.');
+      const advanced=commonSkill?state.offer.advanced[0]:state.offer.advanced.find(card=>card.id===action.advancedId);if(!advanced)return fail(state,commonSkill?'No Advanced Action is available.':'Choose an Advanced Action from the offer.');
       state.player.skills.push({...skill,used:false});if(commonSkill){state.commonSkills=state.commonSkills.filter(s=>s.id!==action.id);state.commonSkills.push(...state.skillChoices);}else state.commonSkills.push(...state.skillChoices.filter(s=>s.id!==action.id));state.skillChoices.splice(0);
-      const advanced=state.offer.advanced.shift(); if(advanced)state.player.deck.unshift(cardWithUid(advanced,state));
+      state.offer.advanced=state.offer.advanced.filter(card=>card.id!==advanced.id);state.player.deck.unshift(cardWithUid(advanced,state));
       if(state.decks.advanced.length)state.offer.advanced.push(state.decks.advanced.shift());
       log(state,`Learned ${skill.name}${advanced?` and gained ${advanced.name}`:''}.`); return state;
     }
@@ -556,9 +557,9 @@ export function reduceGame(input, action) {
   }
 }
 
-function applyTacticOnTake(state,tactic){
+function applyTacticOnTake(state,tactic,action={}){
   if(tactic.effect==='draw')draw(state,2);
-  if(tactic.effect==='prepare'&&state.player.deck.length){state.player.hand.push(state.player.deck.shift());}
+  if(tactic.effect==='prepare'&&state.player.deck.length){const index=state.player.deck.findIndex(card=>card.uid===action.cardUid),prepared=state.player.deck.splice(index,1)[0];state.player.hand.push(prepared);state.player.deck=shuffled(state.player.deck,state.seed+state.round*131+state.turn);log(state,`${prepared.name} was prepared and the Deed deck was shuffled.`);}
 }
 
 function activateTactic(state,action){
