@@ -171,7 +171,7 @@ export const UNITS = [
 
 const ADVANCED_CARDS = [
   {id:'path-finding',name:'Path Finding',color:'green',type:'advanced',basic:{move:2,movementRule:{allTraversable:{reduction:1,minimum:2}}},strong:{move:4,movementRule:{allTraversable:{replace:2}}}},
-  {id:'blood-rage',name:'Blood Rage',color:'red',type:'advanced',basic:{attack:3},strong:{attack:6}},
+  {id:'blood-rage',name:'Blood Rage',color:'red',type:'advanced',basic:{options:[{id:'controlled',label:'Attack 2',effect:{attack:2}},{id:'wounded',label:'Take a Wound for Attack 5',effect:{attack:5,woundCost:1}}]},strong:{options:[{id:'controlled',label:'Attack 4',effect:{attack:4}},{id:'wounded',label:'Take a Wound for Attack 9',effect:{attack:9,woundCost:1}}]}},
   {id:'diplomacy',name:'Diplomacy',color:'white',type:'advanced',basic:{influence:3},strong:{influence:6}},
   ...EXTENDED_ACTIONS,
 ];
@@ -394,7 +394,8 @@ const EFFECT_PHASES = {
   iceRanged:['combat-ranged','combat-attack'], fireRanged:['combat-ranged','combat-attack'], coldfireRanged:['combat-ranged','combat-attack'],
   iceSiege:['combat-ranged','combat-attack'], fireSiege:['combat-ranged','combat-attack'], coldfireSiege:['combat-ranged','combat-attack'],
   block:['combat-block'], iceBlock:['combat-block'], fireBlock:['combat-block'], coldfireBlock:['combat-block'], terrainBlock:['combat-block'],
-  attack:['combat-attack'], iceAttack:['combat-attack'], fireAttack:['combat-attack'], coldfireAttack:['combat-attack'],
+  attack:['combat-attack'], iceAttack:['combat-attack'], fireAttack:['combat-attack'], coldfireAttack:['combat-attack'], attackPerBlocked:['combat-attack'],
+  influenceScaling:['action'],
   armorBreak:['combat-ranged','combat-block','combat-attack'],
 };
 const effectAllowedInPhase=(effect,phase)=>(EFFECT_PHASES[effect]||[]).includes(phase);
@@ -467,6 +468,9 @@ function addEffect(state, effect, sidewaysAs, choices={}) {
     else if(type==='ignoreRampagers')state.bonuses.ignoreRampagers=Boolean(amount);
     else if(type==='handLimitBonus')state.bonuses.handLimitBonus=(state.bonuses.handLimitBonus||0)+amount;
     else if(type==='additionalMana'){}
+    else if(type==='attackPerBlocked')state.points.attack+=amount.base+(state.combat?.blockedIds?.length||0)*amount.per;
+    else if(type==='influenceScaling')state.points.influence+=amount.base+(state.player.wounds||0)*amount.per;
+    else if(type==='armorChange'){const enemy=livingCombatEnemies(state).find(item=>enemyKey(item)===choices.targetId),before=enemy.armor;enemy.armor=Math.max(amount.minimum||1,enemy.armor+amount.amount);if(state.combat.enemy!==enemy)state.combat.enemy.armor=Math.max(1,state.combat.enemy.armor-(before-enemy.armor));}
     else if(['crystallize','gainCrystalChoice','poweredByAny','manaDraw','allowedMana','maxUnitLevel'].includes(type)){}
     else if(type.endsWith('Crystal')){const color=type.replace('Crystal','');if(state.player.crystals[color]<3)state.player.crystals[color]++;}
     else if (type === 'mana') {
@@ -649,6 +653,7 @@ export function reduceGame(input, action) {
       if(effect.reduceHexCost){const chosen=state.map.find(hex=>hex.q===action.q&&hex.r===action.r);if(!chosen||chosen.revealed===false||(chosen.q===state.player.q&&chosen.r===state.player.r)||!Number.isFinite(TERRAIN_COST[state.time][chosen.terrain]))return fail(state,'Choose a revealed traversable map space other than your current space.');}
       if(effect.reduceTerrainCost&&!['hills','forest','desert','swamp','wasteland'].includes(action.terrain))return fail(state,'Choose hills, forest, desert, swamp, or wasteland.');
       if(effect.cardBoost&&!state.player.hand.some(item=>item.uid!==card.uid&&item.id!=='wound'&&!['spell','artifact'].includes(item.type)))return fail(state,'Concentration needs another Action card in hand.');
+      if(effect.armorChange){const target=livingCombatEnemies(state).find(item=>enemyKey(item)===action.targetId);if(!target)return fail(state,'Choose a living enemy.');if((target.traits||[]).includes(effect.armorChange.exclude)||(target.traits||[]).includes('arcane-immunity'))return fail(state,'That enemy is immune to this armor reduction.');}
       if(card.type==='spell'){
         if(action.mode==='sideways'){}else if(action.mode==='basic'){if(!canSpendMana(state,card.color))return fail(state,`Casting this Spell requires ${card.color} mana.`);spendMana(state,card.color);}else if(action.mode==='strong'){if(effectiveTime(state)!=='night')return fail(state,'The strong Spell effect can only be cast at Night.');if(!canSpendMana(state,card.color)||!state.mana.includes('black'))return fail(state,`The strong Spell requires ${card.color} and black mana.`);spendMana(state,card.color);state.mana.splice(state.mana.indexOf('black'),1);}else return fail(state,'Choose a Spell effect.');
       } else if(card.type!=='artifact'&&action.mode==='strong'){const manaCost=[];if(!pendingBoost)manaCost.push({color:effect.poweredByAny?action.powerColor:card.color,count:1});if(effect.additionalMana)manaCost.push({color:effect.additionalMana,count:1});if(manaCost.length&&!payManaCost(state,manaCost))return fail(state,`The strong action requires ${manaCost.map(item=>item.color).join(' + ')} mana.`);}
