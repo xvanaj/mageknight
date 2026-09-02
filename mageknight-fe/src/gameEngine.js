@@ -266,7 +266,7 @@ const scenarioTileIds=(scenario,playerCount)=>{const setup=SCENARIO_TILE_COUNTS[
 const rollSource=(count,time,seed)=>{const faces=[...COLORS,'gold','black',...COLORS],colors=shuffled(faces,seed+(time==='night'?97:0)).slice(0,count),required=Math.ceil(count/2);let basics=colors.filter(color=>COLORS.includes(color)).length;for(let index=0;index<colors.length&&basics<required;index++)if(!COLORS.includes(colors[index])){colors[index]=COLORS[(seed+index*17)%COLORS.length];basics++;}return colors.map((color,index)=>({id:`die-${index}`,color,used:false}));};
 const log = (state, message) => { state.log.unshift({ turn: state.turn, round: state.round, message }); state.log = state.log.slice(0, 80); };
 const fail = (state, error) => ({ ...state, error });
-const freshBonuses=()=>({sideways:null,manaOverload:null,terrainReduction:null,unitResistances:false,attackConversion:null,swiftBlock:0,extraSourceUses:0,blackAsBasic:false});
+const freshBonuses=()=>({sideways:null,manaOverload:null,terrainReduction:null,terrainCostReduction:null,hexCostReduction:null,defeatFame:null,unitResistances:false,attackConversion:null,swiftBlock:0,extraSourceUses:0,blackAsBasic:false});
 const resetTurnBonuses=state=>{Object.assign(state.bonuses,freshBonuses());state.pendingCardBoost=null;};
 const checkpointTurn=state=>{const snapshot=clone({...state,undoCheckpoint:null});delete snapshot.undoCheckpoint;snapshot.undoBlockedReason=null;state.undoCheckpoint=snapshot;state.undoBlockedReason=null;};
 const lockUndo=(state,reason)=>{if(state.undoCheckpoint){state.undoCheckpoint=null;state.undoBlockedReason=reason;}};
@@ -450,8 +450,10 @@ function addEffect(state, effect, sidewaysAs, choices={}) {
     else if(type==='blackAsBasic')state.bonuses.blackAsBasic=Boolean(amount);
     else if(type==='cardBoost')state.pendingCardBoost={bonus:amount};
     else if(type==='terrainBlock'){const hex=currentHex(state),value=TERRAIN_COST[effectiveTime(state)][hex?.terrain];if(Number.isFinite(value))state.points[effectiveTime(state)==='day'?'fireBlock':'iceBlock']+=value;}
-    else if(type==='famePerDefeat')state.bonuses.defeatFame=amount;
-    else if(['crystallize','gainCrystalChoice','poweredByAny','manaDraw','allowedMana','maxUnitLevel','reduceHexCost','reduceTerrainCost'].includes(type)){}
+    else if(type==='famePerDefeat')state.bonuses.defeatFame={amount,phase:state.phase==='combat-attack'?'attack':'ranged'};
+    else if(type==='reduceHexCost')state.bonuses.hexCostReduction={key:`${choices.q}:${choices.r}`,reduction:amount.reduction,minimum:amount.minimum};
+    else if(type==='reduceTerrainCost')state.bonuses.terrainCostReduction={terrain:choices.terrain,reduction:amount.reduction,minimum:amount.minimum};
+    else if(['crystallize','gainCrystalChoice','poweredByAny','manaDraw','allowedMana','maxUnitLevel'].includes(type)){}
     else if(type.endsWith('Crystal')){const color=type.replace('Crystal','');if(state.player.crystals[color]<3)state.player.crystals[color]++;}
     else if (type === 'mana') {
       const color = choices.manaColor;
@@ -630,6 +632,8 @@ export function reduceGame(input, action) {
       if(effect.gainCrystalChoice&&!COLORS.includes(action.crystalColor))return fail(state,'Choose a basic crystal color.');
       if(effect.poweredByAny&&!COLORS.includes(action.powerColor))return fail(state,'Choose which basic mana powers this card.');
       if(effect.manaDraw){const dieIds=[...new Set(action.dieIds||[])],colors=action.manaColors||[];if(dieIds.length!==effect.manaDraw.dice||colors.length!==effect.manaDraw.dice||dieIds.some(id=>!state.source.some(die=>die.id===id))||colors.some(color=>!COLORS.includes(color)))return fail(state,`Choose ${effect.manaDraw.dice} Source ${effect.manaDraw.dice===1?'die and color':'dice and colors'}.`);}
+      if(effect.reduceHexCost){const chosen=state.map.find(hex=>hex.q===action.q&&hex.r===action.r);if(!chosen||chosen.revealed===false||(chosen.q===state.player.q&&chosen.r===state.player.r)||!Number.isFinite(TERRAIN_COST[state.time][chosen.terrain]))return fail(state,'Choose a revealed traversable map space other than your current space.');}
+      if(effect.reduceTerrainCost&&!['hills','forest','desert','swamp','wasteland'].includes(action.terrain))return fail(state,'Choose hills, forest, desert, swamp, or wasteland.');
       if(effect.cardBoost&&!state.player.hand.some(item=>item.uid!==card.uid&&item.id!=='wound'&&!['spell','artifact'].includes(item.type)))return fail(state,'Concentration needs another Action card in hand.');
       if(card.type==='spell'){
         if(action.mode==='sideways'){}else if(action.mode==='basic'){if(!canSpendMana(state,card.color))return fail(state,`Casting this Spell requires ${card.color} mana.`);spendMana(state,card.color);}else if(action.mode==='strong'){if(effectiveTime(state)!=='night')return fail(state,'The strong Spell effect can only be cast at Night.');if(!canSpendMana(state,card.color)||!state.mana.includes('black'))return fail(state,`The strong Spell requires ${card.color} and black mana.`);spendMana(state,card.color);state.mana.splice(state.mana.indexOf('black'),1);}else return fail(state,'Choose a Spell effect.');
@@ -737,7 +741,7 @@ export function reduceGame(input, action) {
       if(state.phase!=='combat-ranged')return fail(state,'Not in the Ranged/Siege phase.');const targets=chosenCombatEnemies(state,action.targetIds);if(!targets.length)return fail(state,'Choose at least one living enemy.');
       const firstId=action.targetIds?.[0]||enemyKey(targets[0]),defended=targets.map(enemy=>!state.combat.attackStarted&&enemyKey(enemy)===firstId&&enemy.defense?{...enemy,armor:enemy.armor+enemy.defense}:enemy),required=rangedRequirements(defended),keys=required.siege?RANGED_POINT_KEYS.filter(key=>key.toLowerCase().includes('siege')):RANGED_POINT_KEYS,power=attackPowerFrom(state.points,keys),available=Object.values(power).reduce((sum,value)=>sum+value,0),canDefeat=!required.impossible&&canDefeatWithAttack(defended,power);
       if(!canDefeat){if(action.targetIds?.length)return fail(state,required.impossible?'A twice-fortified enemy cannot be targeted in this phase.':`That group needs ${required.siege||required.open} ${required.siege?'Siege':'Ranged/Siege'} Attack after resistances; ${available} raw elemental power is available.`);return finishRangedPhase(state);}
-      state.combat.attackStarted=true;markCombatDefeated(state,targets);spendCombatPoints(state,RANGED_POINT_KEYS);log(state,`${targets.map(enemy=>enemy.name).join(', ')} defeated with Ranged/Siege Attack.`);if(!livingCombatEnemies(state).length)return winCombat(state,'ranged');return state;
+      state.combat.attackStarted=true;markCombatDefeated(state,targets);if(state.bonuses.defeatFame?.phase==='ranged'){const bonus=targets.length*state.bonuses.defeatFame.amount;gainFame(state,bonus);state.bonuses.defeatFame=null;log(state,`Axe Throw granted ${bonus} bonus Fame for ${targets.length} ranged defeat${targets.length===1?'':'s'}.`);}spendCombatPoints(state,RANGED_POINT_KEYS);log(state,`${targets.map(enemy=>enemy.name).join(', ')} defeated with Ranged/Siege Attack.`);if(!livingCombatEnemies(state).length)return winCombat(state,'ranged');return state;
     }
     case 'FINISH_RANGED': if(state.phase!=='combat-ranged')return fail(state,'Not in the Ranged/Siege phase.');return finishRangedPhase(state);
     case 'BLOCK_ENEMY': {
@@ -766,7 +770,7 @@ export function reduceGame(input, action) {
     case 'RESOLVE_ATTACK': {
       if(state.phase!=='combat-attack')return fail(state,'Not in the Attack phase.');const targets=chosenCombatEnemies(state,action.targetIds);if(!targets.length)return fail(state,'Choose at least one living enemy.');
       const firstId=action.targetIds?.[0]||enemyKey(targets[0]),adjusted=targets.map(enemy=>{let armor=enemy.armor;if(enemy.traits.includes('elusive')&&!enemyFullyBlocked(state,enemy))armor=enemy.elusiveArmor||Math.ceil(armor*1.5);if(!state.combat.attackStarted&&enemyKey(enemy)===firstId&&enemy.defense)armor+=enemy.defense;return armor===enemy.armor?enemy:{...enemy,armor};}),power=attackPowerFrom(state.points,[...MELEE_POINT_KEYS,...RANGED_POINT_KEYS]),required=adjusted.reduce((sum,enemy)=>sum+enemy.armor,0);if(!canDefeatWithAttack(adjusted,power))return fail(state,`The effective Attack cannot defeat this group (${required} total Armor; ${power.physical} physical, ${power.ice} ice, ${power.fire} fire, ${power.coldfire} cold fire available).`);
-      state.combat.attackStarted=true;markCombatDefeated(state,targets);spendCombatPoints(state,[...MELEE_POINT_KEYS,...RANGED_POINT_KEYS]);log(state,`${targets.map(enemy=>enemy.name).join(', ')} defeated in melee.`);if(!livingCombatEnemies(state).length)return winCombat(state,'attack');return state;
+      state.combat.attackStarted=true;markCombatDefeated(state,targets);if(state.bonuses.defeatFame?.phase==='attack'){const bonus=targets.length*state.bonuses.defeatFame.amount;gainFame(state,bonus);state.bonuses.defeatFame=null;log(state,`Axe Throw granted ${bonus} bonus Fame for ${targets.length} attack defeat${targets.length===1?'':'s'}.`);}spendCombatPoints(state,[...MELEE_POINT_KEYS,...RANGED_POINT_KEYS]);log(state,`${targets.map(enemy=>enemy.name).join(', ')} defeated in melee.`);if(!livingCombatEnemies(state).length)return winCombat(state,'attack');return state;
     }
     case 'END_COMBAT': if(state.phase!=='combat-attack')return fail(state,'Combat may be ended after damage is assigned.');return leaveCombatWithSurvivors(state);
     case 'INTERACT': {if(action.kind!=='plunder'&&state.player.turnAction&&state.player.turnAction!=='interact')return fail(state,'Only one action may be taken each turn.');const result=interact(state,action);if(!result.error&&action.kind!=='plunder')result.player.turnAction='interact';return result;}
@@ -925,7 +929,7 @@ function finishPvpReaction(state,pvp){
 }
 
 function finishRangedPhase(state){
-  spendCombatPoints(state,RANGED_POINT_KEYS);state.combat.blockEnemies=livingCombatEnemies(state).flatMap(enemy=>{
+  spendCombatPoints(state,RANGED_POINT_KEYS);state.bonuses.defeatFame=null;state.combat.blockEnemies=livingCombatEnemies(state).flatMap(enemy=>{
     if(!(enemy.traits||[]).includes('summon'))return attackInstances(enemy);
     lockUndo(state,'A summoned enemy token was revealed.');
     const summoned=drawEnemyToken(state,'brown')||{...clone(ENEMIES.den),category:'brown'};const token={...clone(summoned),uid:`summon-${state.turn}-${enemyKey(enemy)}-${summoned.uid||summoned.id}`,summonerId:enemyKey(enemy)};log(state,`${enemy.name} summoned ${token.name} for the Block and Damage phases.`);return token;

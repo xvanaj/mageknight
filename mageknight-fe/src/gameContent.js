@@ -61,7 +61,7 @@ export const CHARACTER_PROFILES = {
     name: 'Braevalar', armor: 2,
     replacements: [
       ['march','one-with-the-land','One With The Land','green',choose(option('move','Move 2',{move:2}),option('heal','Heal 1',{heal:1}),option('block','Block 2',{block:2})),choose(option('move','Move 4',{move:4}),option('heal','Heal 2',{heal:2}),option('terrain-block','Block from your terrain',{terrainBlock:true}))],
-      ['stamina','druidic-paths','Druidic Paths','blue',{move:2,reduceHexCost:1},{move:4,reduceTerrainCost:1}],
+      ['stamina','druidic-paths','Druidic Paths','blue',{move:2,reduceHexCost:{reduction:2,minimum:2}},{move:4,reduceTerrainCost:{reduction:2,minimum:2}}],
     ],
     skills: [skill('braevalar-earth','Earth Mastery','block',3),skill('braevalar-air','Air Mastery','move',3),skill('braevalar-water','Water Mastery','iceAttack',2),skill('braevalar-fire','Fire Mastery','fireAttack',2),skill('braevalar-druid','Druidic Paths','move',3),skill('braevalar-storm','Storm','siege',2),skill('braevalar-calm','Calm','heal',2),skill('braevalar-cycle','Cycle of Nature','draw',2,'round'),skill('braevalar-mana','Elemental Bond','mana',1),skill('braevalar-ward','Elemental Ward','fireBlock',3)],
   },
