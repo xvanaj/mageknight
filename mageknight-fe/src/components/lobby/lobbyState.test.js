@@ -12,30 +12,6 @@ test('a host can start a solo game after choosing a character and readying up', 
   expect(updateLobby(lobby, { type: 'START' }).status).toBe('playing');
 });
 
-test.each([
-  ['Full Conquest', 'full-conquest'],
-  ['Blitz Conquest', 'blitz-conquest'],
-  ['Full Cooperation', 'cooperative-conquest'],
-])('%s permits one ready player', (_name, scenario) => {
-  let lobby = createLobby('SOLO1234', host);
-  lobby = updateLobby(lobby, { type: 'SET_SCENARIO', scenario });
-  lobby = updateLobby(lobby, { type: 'SELECT_CHARACTER', playerId: host.id, character: 'tovak' });
-  lobby = updateLobby(lobby, { type: 'SET_READY', playerId: host.id, ready: true });
-  expect(canStartLobby(lobby)).toBe(true);
-});
-
-test.each([
-  ['Full Conquest', 'full-conquest'],
-  ['Blitz Conquest', 'blitz-conquest'],
-  ['Full Cooperation', 'cooperative-conquest'],
-])('%s permits one ready player', (_name, scenario) => {
-  let lobby = createLobby('SOLO1234', host);
-  lobby = updateLobby(lobby, { type: 'SET_SCENARIO', scenario });
-  lobby = updateLobby(lobby, { type: 'SELECT_CHARACTER', playerId: host.id, character: 'tovak' });
-  lobby = updateLobby(lobby, { type: 'SET_READY', playerId: host.id, ready: true });
-  expect(canStartLobby(lobby)).toBe(true);
-});
-
 test.each(SCENARIOS.map(scenario => [scenario.name, scenario.id]))('%s permits one ready player', (_name, scenario) => {
   let lobby = createLobby('SOLO1234', host);
   lobby = updateLobby(lobby, { type: 'SET_SCENARIO', scenario });
