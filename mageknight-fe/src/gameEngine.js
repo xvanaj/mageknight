@@ -349,7 +349,11 @@ const provokingEnemies=(state,destination)=>state.map.filter(hex=>hex.revealed!=
 export function legalExplorations(state){
   if(!state.explorationEnabled||state.phase!=='action'||state.player.turnAction)return [];
   if(state.publicExplorations)return state.publicExplorations.map(option=>({...option,legal:state.points.move>=2}));
-  const nextTileId=state.tileDeck?.[0],ids=new Set();return state.map.filter(hex=>hex.revealed===false&&hex.tileId===nextTileId&&distance(state.player,hex)===1&&(!ids.has(hex.tileId)&&ids.add(hex.tileId))).map(hex=>({tileId:hex.tileId,q:hex.q,r:hex.r,cost:2,legal:state.points.move>=2}));
+  const nextTileId=state.tileDeck?.[0],nextTile=MAP_TILES.find(tile=>tile.id===nextTileId),ids=new Set();if(!nextTile)return [];return state.map.filter(hex=>hex.revealed===false&&hex.core===Boolean(nextTile.core)&&distance(state.player,hex)===1&&(!ids.has(hex.tileId)&&ids.add(hex.tileId))).map(hex=>({tileId:nextTileId,slotId:hex.tileId,q:hex.q,r:hex.r,cost:2,legal:state.points.move>=2}));
+}
+
+function placeTileInSlot(state,tileId,slotId){
+  if(tileId===slotId)return;const tileHexes=state.map.filter(hex=>hex.tileId===tileId),slotHexes=state.map.filter(hex=>hex.tileId===slotId);if(tileHexes.length!==slotHexes.length)return;for(let index=0;index<tileHexes.length;index++){const tilePosition={q:tileHexes[index].q,r:tileHexes[index].r,s:tileHexes[index].s};tileHexes[index].q=slotHexes[index].q;tileHexes[index].r=slotHexes[index].r;tileHexes[index].s=slotHexes[index].s;slotHexes[index].q=tilePosition.q;slotHexes[index].r=tilePosition.r;slotHexes[index].s=tilePosition.s;}
 }
 
 export function calculateScore(state){
@@ -475,12 +479,12 @@ export function reduceGame(input, action) {
     }
     case 'EXPLORE': {
       if(!state.explorationEnabled||state.phase!=='action')return fail(state,'Exploration is not available now.');if(state.player.turnAction)return fail(state,'Exploration must happen before your turn action.');
-      const target=state.map.find(hex=>(action.tileId?hex.tileId===action.tileId:(hex.q===action.q&&hex.r===action.r))&&hex.revealed===false&&distance(state.player,hex)===1);if(!target)return fail(state,'That tile is not adjacent to your position.');
-      if(target.tileId!==state.tileDeck?.[0])return fail(state,'Only the top map tile may be explored.');
+      const topTileId=state.tileDeck?.[0],topTile=MAP_TILES.find(item=>item.id===topTileId),target=state.map.find(hex=>(action.q!==undefined&&action.r!==undefined?hex.q===action.q&&hex.r===action.r:action.slotId?hex.tileId===action.slotId:hex.revealed===false&&hex.core===Boolean(topTile?.core))&&hex.revealed===false&&distance(state.player,hex)===1);if(!target)return fail(state,'Choose an adjacent legal placement for the top map tile.');
+      if(target.core!==Boolean(topTile?.core))return fail(state,`The top ${topTile?.core?'core':'countryside'} tile needs a matching placement.`);
       if(state.points.move<2)return fail(state,'Exploration requires 2 Move.');
-      const tile=MAP_TILES.find(item=>item.id===target.tileId);const wildernessRemaining=state.map.some(hex=>hex.revealed===false&&!hex.core);
-      if(tile?.core&&wildernessRemaining)return fail(state,'Reveal all countryside tiles before a core tile.');
-      lockUndo(state,'A new map tile and its tokens were revealed.');state.points.move-=2;state.player.atTurnStart=false;state.player.movedThisTurn=true;state.map.filter(hex=>hex.tileId===target.tileId).forEach(hex=>{hex.revealed=true;if(hex.site==='ruins'&&state.time==='night'&&hex.ruinsToken)hex.ruinsToken.faceDown=true;});revealEnemyTokens(state,target.tileId);revealVisibleGarrisons(state);state.exploredTiles.push(target.tileId);state.tileDeck.shift();log(state,`${state.player.name} explored ${target.tileId}.`);return state;
+      const wildernessRemaining=state.map.some(hex=>hex.revealed===false&&!hex.core);
+      if(topTile?.core&&wildernessRemaining)return fail(state,'Reveal all countryside tiles before a core tile.');
+      const slotId=target.tileId;lockUndo(state,'A new map tile and its tokens were revealed.');placeTileInSlot(state,topTileId,slotId);state.points.move-=2;state.player.atTurnStart=false;state.player.movedThisTurn=true;state.map.filter(hex=>hex.tileId===topTileId).forEach(hex=>{hex.revealed=true;if(hex.site==='ruins'&&state.time==='night'&&hex.ruinsToken)hex.ruinsToken.faceDown=true;});revealEnemyTokens(state,topTileId);revealVisibleGarrisons(state);state.exploredTiles.push(topTileId);state.tileDeck.shift();log(state,`${state.player.name} placed and explored ${topTileId}.`);return state;
     }
     case 'START_COOPERATIVE_ASSAULT': {
       if(state.player.turnAction)return fail(state,'Only one action may be taken each turn.');
