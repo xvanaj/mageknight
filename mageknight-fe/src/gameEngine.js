@@ -192,12 +192,13 @@ const tileForHex=(q,r)=>MAP_TILES.find(tile=>tile.hexes.some(hex=>hex[0]===q&&he
 const prepareMap=exploration=>clone(HEXES).map(hex=>{
   const tile=tileForHex(hex.q,hex.r);
   const category=hex.site==='rampaging'?'orc':hex.site==='draconum'?'dragon':hex.site==='keep'?'grey':hex.site==='mage-tower'?'violet':['dungeon','monster-den','spawning-grounds'].includes(hex.site)?'brown':hex.site==='tomb'?'red':null;
-  return {...hex,tileId:tile?.id||'portal',core:Boolean(tile?.core),enemyCategory:category,revealed:!exploration||!tile};
+  return {...hex,tileId:tile?.id||'portal',core:Boolean(tile?.core),enemyCategory:category,enemyFaceDown:['keep','mage-tower','city'].includes(hex.site)&&Boolean(hex.enemy),revealed:!exploration||!tile};
 });
 
 const createEnemyDecks=seed=>Object.fromEntries(Object.entries(ENEMY_POOLS).map(([category,ids],index)=>[category,shuffled(ids.flatMap((id,copy)=>[{...clone(ENEMIES[id]),uid:`${category}-${id}-${copy}`}]),seed+101+index*19)]));
-function revealEnemyTokens(state,tileId){state.map.filter(hex=>hex.tileId===tileId&&hex.enemyCategory&&hex.site!=='spawning-grounds').forEach(hex=>{const deck=state.enemyDecks[hex.enemyCategory];if(deck?.length){const token=deck.shift();hex.enemy={...token,uid:`${hex.q}:${hex.r}:${token.uid}`};hex.enemies=[clone(hex.enemy)];}});}
-function setupRuins(state){state.map.filter(hex=>hex.site==='ruins').forEach((ruins,index)=>{const roll=(state.seed+index)%3;if(roll===0){ruins.enemy=null;ruins.ruinsToken={type:'altar',color:COLORS[(state.seed+index)%COLORS.length],fame:7};}else if(roll===1)ruins.ruinsToken={type:'enemies',reward:'artifact'};else ruins.ruinsToken={type:'enemies',reward:'crystals',count:4};});}
+function revealEnemyTokens(state,tileId){state.map.filter(hex=>hex.tileId===tileId&&hex.enemyCategory&&hex.site!=='spawning-grounds').forEach(hex=>{const deck=state.enemyDecks[hex.enemyCategory];if(deck?.length){const token=deck.shift();hex.enemy={...token,uid:`${hex.q}:${hex.r}:${token.uid}`};hex.enemies=[clone(hex.enemy)];hex.enemyFaceDown=['keep','mage-tower'].includes(hex.site);}});}
+function revealVisibleGarrisons(state){const players=state.players||[state.player];state.map.filter(hex=>hex.revealed!==false&&hex.enemyFaceDown&&hex.enemy&&['keep','mage-tower','city'].includes(hex.site)).forEach(hex=>{const adjacent=players.some(player=>distance(player,hex)<=1);if(adjacent&&(hex.site==='city'||state.time==='day'))hex.enemyFaceDown=false;});}
+function setupRuins(state){state.map.filter(hex=>hex.site==='ruins').forEach((ruins,index)=>{const roll=(state.seed+index)%3;if(roll===0){ruins.enemy=null;ruins.ruinsToken={type:'altar',color:COLORS[(state.seed+index)%COLORS.length],fame:7,faceDown:false};}else if(roll===1)ruins.ruinsToken={type:'enemies',reward:'artifact',faceDown:false};else ruins.ruinsToken={type:'enemies',reward:'crystals',count:4,faceDown:false};});}
 
 const makePlayer=(seed,character='tovak',name)=>{
   const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;
@@ -222,6 +223,7 @@ export function createGame(seed = 20260901, options = {}) {
   };
   state.player.atTurnStart=!options.tactics;
   setupRuins(state);
+  revealVisibleGarrisons(state);
   if(!options.exploration&&state.map.some(hex=>hex.site==='monastery'&&!hex.burned)&&state.decks.advanced.length)state.offer.monastery.push(state.decks.advanced.shift());
   log(state, 'Solo Conquest begins. It is Day. Your first hand is ready.');
   if(state.phase==='action')checkpointTurn(state);
@@ -252,7 +254,7 @@ export function gameViewForPlayer(input,playerId){
   if(!input)return null;const state=migrateState(clone(input));if(!state.multiplayer)return state;
   const own=bindPlayerState(state,playerId);if(!own)return null;
   state.viewerPlayerId=playerId;state.players=state.players.map(player=>player.id===playerId?player:{...player,handCount:player.hand.length,deckCount:player.deck.length,discardCount:player.discard.length,hand:[],deck:[]});
-  state.player=state.players.find(player=>player.id===playerId);if(playerId!==state.activePlayerId)state.points=freshPoints();state.map=state.map.map(hex=>{if(hex.revealed===false)return {q:hex.q,r:hex.r,s:hex.s,core:hex.core,revealed:false};if(SITES[hex.site]?.underground&&hex.enemy&&!(state.combat?.q===hex.q&&state.combat?.r===hex.r))return {...hex,enemy:{id:'hidden-underground',uid:`hidden-${hex.q}:${hex.r}`,name:'Hidden defender',hidden:true},enemies:[]};return hex;});if(state.cooperativeAssault?.enemyAssignments)state.cooperativeAssault.enemyAssignments=Object.fromEntries(Object.entries(state.cooperativeAssault.enemyAssignments).map(([id,enemies])=>[id,id===playerId?enemies:enemies.map(()=>null)]));state.hiddenDeckCounts=Object.fromEntries(Object.entries(state.decks||{}).map(([name,cards])=>[name,cards.length]));state.hiddenEnemyCounts=Object.fromEntries(Object.entries(state.enemyDecks||{}).map(([name,cards])=>[name,cards.length]));state.tileDeckCount=state.tileDeck?.length||0;state.skillDeckCount=state.skillDeck?.length||0;state.canUndoTurn=Boolean(state.undoCheckpoint)&&playerId===state.activePlayerId;state.decks={};state.enemyDecks={};state.tileDeck=[];state.skillDeck=[];delete state.playerResources;delete state.undoCheckpoint;return state;
+  state.player=state.players.find(player=>player.id===playerId);if(playerId!==state.activePlayerId)state.points=freshPoints();state.map=state.map.map(hex=>{if(hex.revealed===false)return {q:hex.q,r:hex.r,s:hex.s,core:hex.core,revealed:false};if(hex.enemyFaceDown&&hex.enemy&&!(state.combat?.q===hex.q&&state.combat?.r===hex.r))return {...hex,enemy:{id:'hidden-garrison',uid:`hidden-${hex.q}:${hex.r}`,name:'Hidden garrison',hidden:true},enemies:[]};if(hex.site==='ruins'&&hex.ruinsToken?.faceDown)return {...hex,ruinsToken:{type:'hidden',faceDown:true},enemy:hex.enemy?{id:'hidden-ruins',uid:`hidden-${hex.q}:${hex.r}`,name:'Hidden ruins',hidden:true}:null,enemies:[]};if(SITES[hex.site]?.underground&&hex.enemy&&!(state.combat?.q===hex.q&&state.combat?.r===hex.r))return {...hex,enemy:{id:'hidden-underground',uid:`hidden-${hex.q}:${hex.r}`,name:'Hidden defender',hidden:true},enemies:[]};return hex;});if(state.cooperativeAssault?.enemyAssignments)state.cooperativeAssault.enemyAssignments=Object.fromEntries(Object.entries(state.cooperativeAssault.enemyAssignments).map(([id,enemies])=>[id,id===playerId?enemies:enemies.map(()=>null)]));state.hiddenDeckCounts=Object.fromEntries(Object.entries(state.decks||{}).map(([name,cards])=>[name,cards.length]));state.hiddenEnemyCounts=Object.fromEntries(Object.entries(state.enemyDecks||{}).map(([name,cards])=>[name,cards.length]));state.tileDeckCount=state.tileDeck?.length||0;state.skillDeckCount=state.skillDeck?.length||0;state.canUndoTurn=Boolean(state.undoCheckpoint)&&playerId===state.activePlayerId;state.decks={};state.enemyDecks={};state.tileDeck=[];state.skillDeck=[];delete state.playerResources;delete state.undoCheckpoint;return state;
 }
 
 function freshPoints() { return { move: 0, influence: 0, heal: 0, attack: 0, block: 0, ranged: 0, siege: 0, iceAttack:0, fireAttack:0, iceBlock:0, fireBlock:0 }; }
@@ -428,7 +430,7 @@ export function reduceGame(input, action) {
       if(isOccupiedByOpponent(state,hex)&&provoked.length)return fail(state,'You cannot enter an occupied space while provoking a rampaging enemy.');
       const cost = TERRAIN_COST[state.time][hex.terrain]; if (!Number.isFinite(cost)) return fail(state, 'That terrain is impassable.');
       if (state.points.move < cost) return fail(state, `You need ${cost} Move.`);
-      const origin={q:state.player.q,r:state.player.r};state.player.moveHistory.push(origin);state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r;state.player.atTurnStart=false;state.player.movedThisTurn=true; log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
+      const origin={q:state.player.q,r:state.player.r};state.player.moveHistory.push(origin);state.points.move -= cost; state.player.q=hex.q; state.player.r=hex.r;state.player.atTurnStart=false;state.player.movedThisTurn=true;if(hex.site==='ruins'&&hex.ruinsToken?.faceDown){lockUndo(state,'A face-down ruins token was revealed.');hex.ruinsToken.faceDown=false;log(state,'The ruins token was revealed after entering its space; you may now choose whether to enter the site.');}revealVisibleGarrisons(state);log(state, `Moved to ${hex.terrain}${hex.site ? ` / ${hex.site}`:''}.`);
       if(provoked.length){const enemies=provoked.flatMap(source=>(source.enemy.members||source.enemies||[source.enemy]).map(enemy=>clone(enemy))),enemySources=Object.fromEntries(provoked.flatMap(source=>(source.enemy.members||source.enemies||[source.enemy]).map(enemy=>[enemyKey(enemy),{q:source.q,r:source.r,site:source.site}])));state.player.turnAction='combat';state.phase='combat-ranged';state.combat={q:null,r:null,origin,kind:'provoked',enemy:enemyGroup(enemies),enemies,enemySources,defeatedIds:[],blockedIds:[],blocked:false,woundsTaken:0,damageUnits:[]};log(state,`${provoked.map(item=>item.enemy.name).join(' and ')} attacked during movement.`);}
       return state;
     }
@@ -438,7 +440,7 @@ export function reduceGame(input, action) {
       if(state.points.move<2)return fail(state,'Exploration requires 2 Move.');
       const tile=MAP_TILES.find(item=>item.id===target.tileId);const wildernessRemaining=state.map.some(hex=>hex.revealed===false&&!hex.core);
       if(tile?.core&&wildernessRemaining)return fail(state,'Reveal all countryside tiles before a core tile.');
-      lockUndo(state,'A new map tile and its tokens were revealed.');state.points.move-=2;state.player.atTurnStart=false;state.player.movedThisTurn=true;state.map.filter(hex=>hex.tileId===target.tileId).forEach(hex=>hex.revealed=true);revealEnemyTokens(state,target.tileId);state.exploredTiles.push(target.tileId);state.tileDeck=state.tileDeck.filter(id=>id!==target.tileId);log(state,`${state.player.name} explored ${target.tileId}.`);return state;
+      lockUndo(state,'A new map tile and its tokens were revealed.');state.points.move-=2;state.player.atTurnStart=false;state.player.movedThisTurn=true;state.map.filter(hex=>hex.tileId===target.tileId).forEach(hex=>{hex.revealed=true;if(hex.site==='ruins'&&state.time==='night'&&hex.ruinsToken)hex.ruinsToken.faceDown=true;});revealEnemyTokens(state,target.tileId);revealVisibleGarrisons(state);state.exploredTiles.push(target.tileId);state.tileDeck=state.tileDeck.filter(id=>id!==target.tileId);log(state,`${state.player.name} explored ${target.tileId}.`);return state;
     }
     case 'START_COOPERATIVE_ASSAULT': {
       if(state.player.turnAction)return fail(state,'Only one action may be taken each turn.');
@@ -473,7 +475,7 @@ export function reduceGame(input, action) {
       const kind=SITES[hex.site]?.kind;
       if(kind==='adventure' && distance(state.player,hex)!==0)return fail(state,'You must enter an adventure site before exploring it.');
       if(kind!=='adventure' && distance(state.player,hex)!==1)return fail(state,'You must be adjacent to that enemy.');
-      if(SITES[hex.site]?.underground)lockUndo(state,'A hidden underground defender was revealed.');
+      if(SITES[hex.site]?.underground)lockUndo(state,'A hidden underground defender was revealed.');if(hex.enemyFaceDown){lockUndo(state,'A hidden fortified-site garrison was revealed.');hex.enemyFaceDown=false;}
       let origin={q:state.player.q,r:state.player.r};
       if(kind==='fortified'){
         const entryCost=TERRAIN_COST[state.time][hex.terrain]; if(state.points.move<entryCost)return fail(state,`The assault requires ${entryCost} Move to enter that terrain.`);
@@ -790,7 +792,7 @@ function refreshOffers(state){
 
 function nextRound(state) {
   if(state.round>=(state.maxRounds||6)){state.status='lost';state.scoring=calculateScore(state);log(state,'The final Night ends before the cities are conquered. Final scoring is complete.');return state;}
-  state.undoCheckpoint=null;state.undoBlockedReason=null;state.round++; state.time=state.time==='day'?'night':'day';refreshOffers(state);
+  state.undoCheckpoint=null;state.undoBlockedReason=null;state.round++; state.time=state.time==='day'?'night':'day';if(state.time==='day')state.map.filter(hex=>hex.site==='ruins'&&hex.ruinsToken).forEach(hex=>{hex.ruinsToken.faceDown=false;});revealVisibleGarrisons(state);refreshOffers(state);
   if(state.multiplayer){
     state.players.forEach((player,index)=>{bindPlayerState(state,player.id);player.deck=shuffled([...player.discard,...player.hand],state.seed+state.round+index*997);player.hand=[];player.discard=[];player.tactic=null;player.tacticUsed=false;player.cardsPlayedThisTurn=0;player.atTurnStart=false;player.emptyHandPassAllowed=false;player.movedThisTurn=false;player.moveHistory=[];player.turnAction=null;draw(state,handLimit(state));player.units.forEach(unit=>{unit.spent=false;if(unit.banner)unit.banner.used=false;});player.skills.forEach(skill=>{skill.used=false;skill.roundUsed=false;});});
     state.tacticSelections={};state.turnOrder=[];state.activePlayerId=null;state.roundEndTurnsRemaining=null;state.tacticPickOrder=[...state.players].sort((a,b)=>a.fame-b.fame||state.players.indexOf(a)-state.players.indexOf(b)).map(player=>player.id);state.tacticPickerId=state.tacticPickOrder[0];bindPlayerState(state,state.players[0].id);
