@@ -112,7 +112,7 @@ export const EXTENDED_ACTIONS = [
   {id:'regeneration',name:'Regeneration',color:'green',type:'advanced',basic:{heal:1,unitReady:1,maxUnitLevel:2},strong:{heal:2,unitReady:1,maxUnitLevel:3}},
   {id:'song-of-wind',name:'Song of Wind',color:'white',type:'advanced',basic:{move:2,movementRule:{reduction:{plains:1,desert:1,wasteland:1}}},strong:{options:[{id:'wind',label:'Move 2; plains, desert, and wasteland cost 2 less',effect:{move:2,movementRule:{reduction:{plains:2,desert:2,wasteland:2}}}},{id:'lake',label:'Also pay blue: lakes cost 0',effect:{move:2,additionalMana:'blue',movementRule:{reduction:{plains:2,desert:2,wasteland:2},replace:{lake:0}}}}]}},
   {id:'swift-bolt',name:'Swift Bolt',color:'white',type:'advanced',basic:{gainCrystalColor:'white'},strong:{ranged:4}},
-  {id:'training',name:'Training',color:'white',type:'advanced',basic:{draw:1},strong:{draw:2,fame:1}},
+  {id:'training',name:'Training',color:'green',type:'advanced',basic:{training:'discard',removeRequired:true},strong:{training:'hand',removeRequired:true}},
   {id:'steady-tempo',name:'Steady Tempo',color:'blue',type:'advanced',basic:{move:2,endTurnPlacement:'deck-bottom'},strong:{move:4,endTurnPlacement:'deck-top'}},
   {id:'pure-magic',name:'Pure Magic',color:'blue',type:'advanced',basic:{pureMagic:4},strong:{pureMagic:7}},
   {id:'crystal-mastery',name:'Crystal Mastery',color:'blue',type:'advanced',basic:{crystalMastery:'duplicate'},strong:{crystalMastery:'preserve'}},
