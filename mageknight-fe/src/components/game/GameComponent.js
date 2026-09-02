@@ -21,6 +21,8 @@ const effectText = effect => Object.entries(effect).map(([k,v]) => {
   if (k === 'decompose') return v==='matching'?'remove an Action card; gain 2 matching crystals':'remove an Action card; gain the other 3 crystals';
   if (k === 'removeRequired') return null;
   if (k === 'training') return v==='hand'?'remove an Action; gain matching Advanced Action to hand':'remove an Action; gain matching Advanced Action to discard';
+  if (k === 'recruitmentBonus') return `each recruited Unit grants Reputation +${v.reputation}${v.fame?` and Fame +${v.fame}`:''}`;
+  if (k === 'learning') return `once this turn, gain an offered Advanced Action for ${v.cost} Influence into your ${v.destination}`;
   if (k === 'manaStorm') return v==='crystal-and-reroll'?'choose a basic Source die: gain its crystal and reroll it':'reroll the Source; use 3 extra dice; black and gold are wild';
   if (k === 'attackBlockCardBonus') return `next sideways combat card gains Attack +${v.attack} or Block +${v.block}`;
   if (k === 'unitCombatBonus') return `each Unit gains Attack +${v.attack} and Block +${v.block}`;
@@ -229,6 +231,7 @@ function ActionPanel({game,here,dispatch,challengeIds,setChallengeIds}){
   return <div className="actions"><p className="phase-help">{here?.site?<><b>{siteNames[here.site]}</b> — {SITES[here.site].rule}</>:'Play cards, move, interact, or end your turn.'}</p>
     {cityInfluence>0&&!game.player.cityInfluenceApplied&&<p className="hint">Your {cityInfluence} city shield{cityInfluence===1?' adds':'s add'} {cityInfluence} Influence to this interaction.</p>}
     {game.player.tactic&&!game.player.tacticUsed&&<TacticAction game={game} dispatch={dispatch}/>}
+    {game.bonuses.learning&&game.offer.advanced.map(card=><button key={`learning-${card.id}`} onClick={()=>dispatch({type:'LEARN_ACTION',id:card.id})}>Learn {card.name}<span>{game.bonuses.learning.cost} Influence · place in {game.bonuses.learning.destination}</span></button>)}
     {SITES[here?.site]?.kind==='adventure'&&(here.enemy||(!here.conquered&&['monster-den','spawning-grounds'].includes(here.site))||(!here.conquered&&here.site==='ruins'&&here.ruinsToken?.type==='enemies'&&!here.ruinsToken.faceDown)||(here.conquered&&SITES[here.site].underground))&&<button className="danger-action" onClick={()=>dispatch({type:'START_COMBAT',q:here.q,r:here.r})}>{here.conquered?'Re-enter':'Explore'} {siteNames[here.site]}<span>Fight {here.site==='ruins'&&!here.enemy?here.ruinsToken.enemyCategories.join(' + '):SITES[here.site].underground||!here.enemy?'hidden defender tokens':here.enemy.name}{here.conquered?' for Fame only':''}</span></button>}
     {here?.site==='ruins'&&here.ruinsToken?.type==='altar'&&!here.ruinsToken.faceDown&&!here.conquered&&!here.used&&<button onClick={()=>dispatch({type:'INTERACT',kind:'altar'})}>Invoke {here.ruinsToken.color} altar<span>{(here.ruinsToken.cost||[{color:here.ruinsToken.color,count:3}]).map(item=>`${item.count} ${item.color}`).join(' + ')} mana · Fame +{here.ruinsToken.fame}</span></button>}
     {here?.site==='monastery'&&!here.burned&&<button className="danger-action" onClick={()=>dispatch({type:'BURN_MONASTERY'})}>Burn monastery<span>Combat · Reputation −3 · gain Artifact</span></button>}
