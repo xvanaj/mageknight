@@ -100,7 +100,7 @@ export const EXTENDED_ACTIONS = [
   {id:'ambush',name:'Ambush',color:'green',type:'advanced',basic:{move:2,attackBlockCardBonus:{attack:1,block:2}},strong:{move:4,attackBlockCardBonus:{attack:2,block:4}}},
   {id:'heroic-tale',name:'Heroic Tale',color:'white',type:'advanced',basic:{influence:3,recruitmentBonus:{reputation:1,fame:0}},strong:{influence:6,recruitmentBonus:{reputation:1,fame:1}}},
   {id:'refreshing-walk-aa',name:'Refreshing Walk',color:'green',type:'advanced',basic:{move:2,healOutsideCombat:1},strong:{move:4,healOutsideCombat:2}},
-  {id:'blood-of-ancients',name:'Blood of Ancients',color:'red',type:'advanced',basic:{attack:3,draw:1},strong:{attack:7,woundCost:1}},
+  {id:'blood-of-ancients',name:'Blood of Ancients',color:'red',type:'advanced',basic:{bloodAncients:'basic'},strong:{bloodAncients:'powered'}},
   {id:'agility',name:'Agility',color:'white',type:'advanced',basic:{move:2,moveConversion:{attack:1},moveCardsInCombat:true},strong:{move:4,moveConversion:{attack:1,ranged:2},moveCardsInCombat:true}},
   {id:'frost-bridge',name:'Frost Bridge',color:'blue',type:'advanced',basic:{move:2,movementRule:{replace:{swamp:1}}},strong:{move:4,movementRule:{replace:{swamp:1,lake:1}}}},
   {id:'ice-bolt',name:'Ice Bolt',color:'blue',type:'advanced',basic:{gainCrystalColor:'blue'},strong:{iceRanged:3}},

@@ -220,7 +220,7 @@ const migrateUnitCards=state=>{
 const migrateUnitPowerData=state=>{const definitions=new Map(UNITS.map(unit=>[unit.id,unit])),refresh=unit=>definitions.has(unit.id)?{...unit,...clone(definitions.get(unit.id)),uid:unit.uid}:unit;for(const player of state.players||[state.player])if(player)player.units=(player.units||[]).map(refresh);state.offer.units=(state.offer.units||[]).map(refresh);for(const name of ['regularUnits','eliteUnits'])state.decks[name]=(state.decks[name]||[]).map(refresh);};
 const migrateState=state=>{
   state.points={...freshPoints(),...(state.points||{})};
-  state.bonuses={...freshBonuses(),...(state.bonuses||{})};state.pendingCardBoost=state.pendingCardBoost||null;
+  state.bonuses={...freshBonuses(),...(state.bonuses||{})};state.pendingCardBoost=state.pendingCardBoost||null;state.pendingBorrowedEffect=state.pendingBorrowedEffect||null;
   const players=state.players||[state.player];players.filter(Boolean).forEach(player=>{player.removed=player.removed||[];player.defeated=player.defeated||[];player.tacticUsed=Boolean(player.tacticUsed);player.skipNextTurn=Boolean(player.skipNextTurn);player.roundOrderFaceDown=Boolean(player.roundOrderFaceDown);player.plunderedBetweenTurns=Boolean(player.plunderedBetweenTurns);player.cardsPlayedThisTurn=player.cardsPlayedThisTurn??player.played?.length??0;player.atTurnStart=Boolean(player.atTurnStart);player.emptyHandPassAllowed=Boolean(player.emptyHandPassAllowed);player.movedThisTurn=Boolean(player.movedThisTurn);player.moveHistory=player.moveHistory||[];player.turnAction=player.turnAction||null;player.cityInfluenceApplied=Boolean(player.cityInfluenceApplied);player.units=(player.units||[]).map(unit=>({...unit,wounded:Boolean(unit.wounded),woundCount:unit.woundCount||0,banner:unit.banner?{...unit.banner,used:Boolean(unit.banner.used)}:null}));});
   state.scenarioFinalTurnsStarted=Boolean(state.scenarioFinalTurnsStarted);
   state.levelUpContext=state.levelUpContext||null;
@@ -331,7 +331,7 @@ export function createGame(seed = 20260901, options = {}) {
     decks: { artifacts:shuffled(clone(ARTIFACT_CARDS),seed+31),advanced:advancedPool,spells:spellPool,regularUnits,eliteUnits },
     player:makePlayer(seed,character),
     skillDeck:shuffled(clone(profile.skills||TOVAK_SKILLS),seed+71), skillChoices:[], commonSkills:[],
-    points: freshPoints(), mana: [], sourceTaken: false, combat: null, pendingRewards:[], bonuses:freshBonuses(),pendingCardBoost:null, log: [], error: null,
+    points: freshPoints(), mana: [], sourceTaken: false, combat: null, pendingRewards:[], bonuses:freshBonuses(),pendingCardBoost:null,pendingBorrowedEffect:null, log: [], error: null,
     scoring:null,pvp:null,cooperativeAssault:null,levelUpContext:null,endTurnContext:null,scenarioEndTurnsRemaining:null,scenarioFinalTurnsStarted:false,roundWasAnnounced:false,removedTactics:{day:[],night:[]},pendingTacticRemoval:null,
   };
   state.player.atTurnStart=!options.tactics;
@@ -390,7 +390,7 @@ const EFFECT_PHASES = {
   move:['action','cooperative-entry'],
   influence:['action'], heal:['action'], draw:['action'], mana:['action'], command:['action'], fame:['action'], unitReady:['action'],
   crystallize:['action'], gainCrystalChoice:['action'], gainCrystalColor:['action'], gainManaColor:['action'], extraSource:['action'], blackAsBasic:['action'], manaDraw:['action'], cardBoost:['action'], crystalMastery:['action'], decompose:['action'], training:['action'], manaStorm:['action'], recruitmentBonus:['action'], learning:['action'],
-  pureMagic:['action','combat-block','combat-attack'],
+  pureMagic:['action','combat-block','combat-attack'], bloodAncients:['action','combat-ranged','combat-block','combat-attack'],
   unitCombatBonus:['combat-ranged','combat-block','combat-attack'],
   blueCrystal:['action'], redCrystal:['action'], greenCrystal:['action'], whiteCrystal:['action'],
   ranged:['combat-ranged','combat-attack'], siege:['combat-ranged','combat-attack'],
@@ -484,6 +484,15 @@ function addEffect(state, effect, sidewaysAs, choices={}) {
     else if(type==='manaStorm'){lockUndo(state,'Mana Storm rerolled the Source.');if(amount==='crystal-and-reroll'){const die=state.source.find(item=>item.id===choices.dieId);gainCrystal(state,die.color);const faces=[...COLORS,'gold','black'];die.color=faces[(state.seed+state.turn*13+Number(die.id.replace(/\D/g,''))*17)%faces.length];}else{state.source=rollSource(state.source.length,state.time,state.seed+state.turn*313);state.bonuses.extraSourceUses+=3;state.bonuses.blackAsBasic=true;state.bonuses.goldAsBasic=true;}}
     else if(type==='recruitmentBonus')state.bonuses.recruitmentBonus=clone(amount);
     else if(type==='learning')state.bonuses.learning=clone(amount);
+    else if(type==='bloodAncients'){
+      if(amount==='basic'){
+        wound(state,1);const learned=state.offer.advanced.find(card=>card.id===choices.advancedId);
+        if(learned){payManaCost(state,[{color:learned.color,count:1}]);state.offer.advanced=state.offer.advanced.filter(card=>card.id!==learned.id);state.player.hand.push(cardWithUid(learned,state));if(state.decks.advanced.length){lockUndo(state,'Blood of Ancients revealed a hidden Advanced Action.');state.offer.advanced.push(state.decks.advanced.shift());}}
+      }else{
+        if(choices.woundDestination==='discard'){state.player.wounds++;state.player.discard.push({id:'wound',uid:`wound-${state.turn}-blood-${state.player.wounds}`,name:'Wound',color:'wound',basic:{},strong:{}});}else wound(state,1);
+        state.pendingBorrowedEffect={source:'blood-of-ancients',mode:'strong'};
+      }
+    }
     else if(type==='attackBlockCardBonus')state.bonuses.attackBlockCardBonus=clone(amount);
     else if(type==='unitCombatBonus')state.bonuses.unitCombatBonus=clone(amount);
     else if(type==='unitsCannotAbsorbDamage')state.bonuses.unitsCannotAbsorbDamage=Boolean(amount);
@@ -601,6 +610,7 @@ export function reduceGame(input, action) {
     bindPlayerState(state,actorId);
   }
   if(state.pendingCardBoost&&!['PLAY_CARD','UNDO_TURN'].includes(action.type))return fail(state,'Finish the card empowered by Concentration before taking another action.');
+  if(state.pendingBorrowedEffect&&!['RESOLVE_BORROWED_EFFECT','UNDO_TURN'].includes(action.type))return fail(state,'Finish the borrowed Advanced Action effect first.');
   switch (action.type) {
     case 'UNDO_TURN': {if(!state.undoCheckpoint)return fail(state,state.undoBlockedReason||'There is no turn checkpoint to restore.');const restored=migrateState(clone(state.undoCheckpoint));if(restored.multiplayer)bindPlayerState(restored,restored.activePlayerId);log(restored,`${restored.player.name} reset the current turn to its last safe checkpoint.`);return restored;}
     case 'UNASSIGN_BANNER': {
@@ -674,6 +684,8 @@ export function reduceGame(input, action) {
       if(effect.decompose){const sacrificed=state.player.hand.find(item=>item.uid===action.removeUid&&item.uid!==card.uid&&['basic','advanced'].includes(item.type||'basic'));if(!sacrificed)return fail(state,'Choose another Basic or Advanced Action card to remove.');}
       if(effect.training){const sacrificed=state.player.hand.find(item=>item.uid===action.removeUid&&item.uid!==card.uid&&['basic','advanced'].includes(item.type||'basic'));if(!sacrificed)return fail(state,'Choose another Basic or Advanced Action card to remove.');const matching=state.offer.advanced.filter(item=>item.color===sacrificed.color);if(matching.length&&!matching.some(item=>item.id===action.advancedId))return fail(state,'Choose a matching-color Advanced Action from the offer.');if(!matching.length&&action.advancedId)return fail(state,'No offered Advanced Action matches the removed card.');}
       if(effect.manaStorm==='crystal-and-reroll'&&!state.source.some(die=>die.id===action.dieId&&COLORS.includes(die.color)))return fail(state,'Choose a basic-color Source die.');
+      if(effect.bloodAncients==='basic'){if(state.phase!=='action')return fail(state,'The basic Blood of Ancients effect is used during the action phase.');if(action.advancedId){const offered=state.offer.advanced.find(item=>item.id===action.advancedId);if(!offered)return fail(state,'Choose an Advanced Action from the offer.');if(!canPayManaCost(state,[{color:offered.color,count:1}]))return fail(state,`You need ${offered.color} mana to gain that Advanced Action.`);}}
+      if(effect.bloodAncients==='powered'){if(!['hand','discard'].includes(action.woundDestination))return fail(state,'Choose whether the Wound goes to your hand or discard pile.');if(!state.offer.advanced.some(item=>legalCardEffectTypes(item.strong,state.phase).length))return fail(state,'No offered Advanced Action has a strong effect usable in this phase.');}
       if(effect.pureMagic){const usable=state.mana.filter(color=>COLORS.includes(color)||(color==='gold'&&effectiveTime(state)==='day'));if(!usable.includes(action.pureColor))return fail(state,'Choose an available basic or daytime gold mana token.');const resolved=action.pureColor==='gold'?action.effectAs:{green:'move',white:'influence',blue:'block',red:'attack'}[action.pureColor];if(!resolved||!effectAllowedInPhase(resolved,state.phase))return fail(state,'That mana color cannot create a useful effect in this phase.');if(action.mode==='strong'&&!pendingBoost){const remaining=[...state.mana],index=remaining.indexOf(action.pureColor);remaining.splice(index,1);if(!canPayManaCost({...state,mana:remaining},[{color:'blue',count:1}]))return fail(state,'Pure Magic needs its chosen token plus blue mana to power the strong effect.');}}
       if(card.type==='spell'){
         if(action.mode==='sideways'){}else if(action.mode==='basic'){if(!canSpendMana(state,card.color))return fail(state,`Casting this Spell requires ${card.color} mana.`);spendMana(state,card.color);}else if(action.mode==='strong'){if(effectiveTime(state)!=='night')return fail(state,'The strong Spell effect can only be cast at Night.');if(!canSpendMana(state,card.color)||!state.mana.includes('black'))return fail(state,`The strong Spell requires ${card.color} and black mana.`);spendMana(state,card.color);state.mana.splice(state.mana.indexOf('black'),1);}else return fail(state,'Choose a Spell effect.');
@@ -684,9 +696,15 @@ export function reduceGame(input, action) {
       if(effect.gainCrystalChoice)gainCrystal(state,action.crystalColor);
       if(effect.manaDraw){action.dieIds.forEach((id,dieIndex)=>{const color=action.manaColors[dieIndex],die=state.source.find(item=>item.id===id);die.color=color;for(let count=0;count<effect.manaDraw.tokensPerDie;count++)state.mana.push(color);});}
       const ambushBonus=state.bonuses.attackBlockCardBonus;addEffect(state, effect, action.mode === 'sideways' ? action.as : null,action);if(action.mode==='sideways'&&['attack','block'].includes(action.as)&&ambushBonus){state.points[action.as]+=ambushBonus[action.as]||0;state.bonuses.attackBlockCardBonus=null;}
-      if(pendingBoost){const stat=Object.keys(effect).find(type=>['move','influence','attack','block'].includes(type));if(stat)addEffect(state,{[stat]:pendingBoost.bonus});state.pendingCardBoost=null;}
+      if(pendingBoost){const stat=Object.keys(effect).find(type=>['move','influence','attack','block'].includes(type));if(stat)addEffect(state,{[stat]:pendingBoost.bonus});if(state.pendingCardBoost===pendingBoost||state.pendingCardBoost?.borrowed)state.pendingCardBoost=null;}
       if(action.mode==='strong'&&state.bonuses.manaOverload?.color===card.color){const stat=['move','influence','attack','block'].find(k=>effect[k]);if(stat){addEffect(state,{[stat]:4});log(state,`Mana Overload adds ${stat} 4.`);}state.bonuses.manaOverload=null;}
       const committedIndex=state.player.hand.findIndex(item=>item.uid===card.uid),committed=state.player.hand.splice(committedIndex,1)[0];if(effect.endTurnPlacement)committed.endTurnPlacement=effect.endTurnPlacement;if(effect.discardRequired){const discardIndex=state.player.hand.findIndex(item=>item.uid===action.discardUid);state.player.discard.push(state.player.hand.splice(discardIndex,1)[0]);}if(effect.removeRequired){const removeIndex=state.player.hand.findIndex(item=>item.uid===action.removeUid);state.player.removed.push(state.player.hand.splice(removeIndex,1)[0]);}if(card.type==='artifact'&&action.mode==='strong')state.player.removed.push(committed);else state.player.played.push(committed);state.player.cardsPlayedThisTurn++;state.player.atTurnStart=false;log(state, `${card.name}: ${action.mode}${action.as||action.effectAs ? ` as ${action.as||action.effectAs}` : ''}.`); return state;
+    }
+    case 'RESOLVE_BORROWED_EFFECT': {
+      const pending=state.pendingBorrowedEffect;if(!pending)return fail(state,'There is no borrowed effect to resolve.');const offered=state.offer.advanced.find(card=>card.id===action.id);if(!offered)return fail(state,'Choose an Advanced Action from the offer.');const effect=offered[pending.mode]||{};if(!legalCardEffectTypes(effect,state.phase).length)return fail(state,'That offered effect is not usable in this phase.');
+      const before=clone(state),fake={...clone(offered),uid:`borrowed-${offered.id}-${state.turn}`};state.player.hand.push(fake);state.pendingBorrowedEffect=null;state.pendingCardBoost={bonus:0,borrowed:true};
+      const result=reduceGame(state,{...action,type:'PLAY_CARD',uid:fake.uid,mode:pending.mode,...(state.multiplayer?{playerId:state.activePlayerId}:{})});if(result.error)return fail(before,result.error);
+      result.player.played=result.player.played.filter(card=>card.uid!==fake.uid);result.player.removed=result.player.removed.filter(card=>card.uid!==fake.uid);result.player.cardsPlayedThisTurn=Math.max(0,result.player.cardsPlayedThisTurn-1);log(result,`Blood of Ancients invoked ${offered.name}'s strong effect without taking it from the offer.`);return result;
     }
     case 'DISCARD_CARD': return fail(state,'Cards are selected for discard only while ending the turn.');
     case 'USE_UNIT': {
