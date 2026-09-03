@@ -20,6 +20,8 @@ const effectText = effect => Object.entries(effect).map(([k,v]) => {
   if (k === 'hornRisk') return v==='repeat'?'roll a mana die; safe rolls add Siege Attack +5 and may be repeated, red or black wounds you and loses the bonus':'roll a mana die; red or black wounds you';
   if (k === 'goldenGrail') return v==='fame'?'gain 1 Fame for each of up to two Wounds healed this turn':'draw a card whenever you heal a Wound this turn';
   if (k === 'bookWisdom') return v==='advanced'?'remove another Action; gain a matching-color Advanced Action to discard':'remove another Action; put a matching-color Spell atop your deck and gain its crystal';
+  if (k === 'bannerCourage') return 'once per round, ready the attached Unit outside combat';
+  if (k === 'readyAllUnits') return 'ready all your Units';
   if (k === 'handLimitBonus') return `hand limit +${v} this turn`;
   if (k === 'additionalMana') return `pay ${v} mana too`;
   if (k === 'attackPerBlocked') return `Attack ${v.base} + ${v.per} per blocked enemy`;
