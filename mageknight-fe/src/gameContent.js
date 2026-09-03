@@ -152,7 +152,7 @@ export const EXTENDED_SPELLS = [
 export const EXTENDED_ARTIFACTS = [
   {id:'horn-of-wrath',name:'Horn of Wrath',color:'red',type:'artifact',basic:{siege:5,hornRisk:'single'},strong:{siege:5,hornRisk:'repeat'}},
   {id:'golden-grail',name:'Golden Grail',color:'white',type:'artifact',basic:{heal:2,goldenGrail:'fame'},strong:{heal:6,goldenGrail:'draw'}},
-  {id:'book-of-wisdom',name:'Book of Wisdom',color:'blue',type:'artifact',basic:{draw:2},strong:{draw:4}},
+  {id:'book-of-wisdom',name:'Book of Wisdom',color:'blue',type:'artifact',basic:{bookWisdom:'advanced'},strong:{bookWisdom:'spell'}},
   {id:'banner-of-courage',name:'Banner of Courage',color:'white',type:'artifact',basic:{block:6},strong:{block:9}},
   {id:'druidic-staff',name:'Druidic Staff',color:'green',type:'artifact',basic:{move:5},strong:{move:8}},
   {id:'banner-of-fear',name:'Banner of Fear',color:'red',type:'artifact',basic:{influence:5},strong:{attack:8}},
