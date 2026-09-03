@@ -143,6 +143,7 @@ export const EXTENDED_SPELLS = [
   {id:'energy-flow',name:'Energy Flow',color:'green',type:'spell',competitive:true,basic:{energyFlow:{heal:false,opponentMaxLevel:2}},strong:{energyFlow:{heal:true,opponentMaxLevel:3}}},
   {id:'mind-read',name:'Mind Read',color:'white',type:'spell',competitive:true,basic:{mindRead:{steal:false}},strong:{mindRead:{steal:true}}},
   {id:'cure',name:'Cure',color:'white',type:'spell',basic:{cure:2},strong:{disease:true}},
+  {id:'charm',name:'Charm',color:'white',type:'spell',basic:{charm:{influence:4,discount:3}},strong:{possessEnemy:true}},
   {id:'whirlwind',name:'Whirlwind',color:'white',type:'spell',basic:{enemyControl:{skipAttack:true}},strong:{defeatTarget:{attackPhaseOnly:true}}},
   {id:'mana-meltdown',name:'Mana Meltdown',color:'red',type:'spell',competitive:true,basic:{manaMeltdown:'basic'},strong:{manaMeltdown:'strong'}},
 ];
