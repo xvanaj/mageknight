@@ -126,6 +126,7 @@ export const EXTENDED_ACTIONS = [
 ];
 
 export const EXTENDED_SPELLS = [
+  {id:'offering',name:'Offering',color:'red',type:'spell',basic:{offering:{maxDiscards:3}},strong:{sacrifice:true}},
   {id:'snowstorm',name:'Snowstorm',color:'blue',type:'spell',basic:{iceRanged:5},strong:{iceSiege:8,woundCost:1}},
   {id:'flame-wall',name:'Flame Wall',color:'red',type:'spell',basic:{options:[{id:'attack',label:'Fire Attack 5',effect:{fireAttack:5}},{id:'block',label:'Fire Block 7',effect:{fireBlock:7}}]},strong:{options:[{id:'attack',label:'Fire Attack 7',effect:{fireAttack:7}},{id:'block',label:'Fire Block 9',effect:{fireBlock:9}}]}},
   {id:'call-to-arms',name:'Call to Arms',color:'white',type:'spell',basic:{callToArms:'borrow'},strong:{callToArms:'recruit'}},
