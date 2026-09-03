@@ -158,7 +158,7 @@ export const EXTENDED_ARTIFACTS = [
   {id:'banner-of-fear',name:'Banner of Fear',color:'red',type:'artifact',basic:{bannerFear:true},strong:{enemyControl:{skipAttack:true,excludeArcane:true}}},
   {id:'banner-of-protection',name:'Banner of Protection',color:'blue',type:'artifact',basic:{bannerProtection:{armor:1,resistances:['fire','ice']}},strong:{bannerProtectionWounds:true}},
   {id:'bow-of-stars',name:'Bow of Starsdawn',color:'white',type:'artifact',basic:{bowDiscard:true},strong:{bowTransform:true}},
-  {id:'ring-of-proficiency',name:'Ring of Proficiency',color:'white',type:'artifact',basic:{any:4},strong:{any:8}},
+  {id:'ring-of-proficiency',name:'Circlet of Proficiency',color:'white',type:'artifact',basic:{circlet:'basic'},strong:{circlet:'strong'}},
   {id:'ruby-ring',name:'Ruby Ring',color:'red',type:'artifact',basic:{fireAttack:5},strong:{fireAttack:9}},
   {id:'sapphire-ring',name:'Sapphire Ring',color:'blue',type:'artifact',basic:{iceAttack:5},strong:{iceAttack:9}},
   {id:'shield-of-fallen-kings',name:'Shield of Fallen Kings',color:'blue',type:'artifact',basic:{block:7},strong:{block:11}},
