@@ -18,6 +18,7 @@ const effectText = effect => Object.entries(effect).map(([k,v]) => {
   if (k === 'timeBending') return 'return other played cards to hand, skip drawing, and immediately take another turn';
   if (k === 'mistVeil') return 'all Units gain every resistance; prevent the next Wound dealt to your Hero';
   if (k === 'hornRisk') return v==='repeat'?'roll a mana die; safe rolls add Siege Attack +5 and may be repeated, red or black wounds you and loses the bonus':'roll a mana die; red or black wounds you';
+  if (k === 'goldenGrail') return v==='fame'?'gain 1 Fame for each of up to two Wounds healed this turn':'draw a card whenever you heal a Wound this turn';
   if (k === 'handLimitBonus') return `hand limit +${v} this turn`;
   if (k === 'additionalMana') return `pay ${v} mana too`;
   if (k === 'attackPerBlocked') return `Attack ${v.base} + ${v.per} per blocked enemy`;
