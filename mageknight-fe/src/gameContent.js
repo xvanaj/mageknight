@@ -150,7 +150,7 @@ export const EXTENDED_SPELLS = [
 ];
 
 export const EXTENDED_ARTIFACTS = [
-  {id:'horn-of-wrath',name:'Horn of Wrath',color:'red',type:'artifact',basic:{attack:6},strong:{siege:9}},
+  {id:'horn-of-wrath',name:'Horn of Wrath',color:'red',type:'artifact',basic:{siege:5,hornRisk:'single'},strong:{siege:5,hornRisk:'repeat'}},
   {id:'golden-grail',name:'Golden Grail',color:'white',type:'artifact',basic:{heal:3},strong:{heal:6,fame:2}},
   {id:'book-of-wisdom',name:'Book of Wisdom',color:'blue',type:'artifact',basic:{draw:2},strong:{draw:4}},
   {id:'banner-of-courage',name:'Banner of Courage',color:'white',type:'artifact',basic:{block:6},strong:{block:9}},
