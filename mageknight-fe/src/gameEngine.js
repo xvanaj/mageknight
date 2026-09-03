@@ -190,6 +190,7 @@ const SPELL_CARDS = [
 const ARTIFACT_CARDS = [
   {id:'banner-of-glory',name:'Banner of Glory',color:'white',type:'artifact',basic:{bannerGlory:{armor:1,power:1,fame:1}},strong:{bannerGloryArmy:{armor:1,power:1,fame:1}}},
   {id:'sword-of-justice',name:'Sword of Justice',color:'red',type:'artifact',basic:{swordJustice:{mode:'discard',attackPerCard:3,fame:1}},strong:{swordJustice:{mode:'double',multiplier:2,fame:1}}},
+  {id:'endless-bag-of-gold',name:'Endless Bag of Gold',color:'white',type:'artifact',basic:{influence:4,fame:2},strong:{influence:9,fame:3}},
   {id:'endless-gem-pouch',name:'Endless Gem Pouch',color:'blue',type:'artifact',basic:{gemPouch:'roll'},strong:{gemPouch:'mana'}},
   ...EXTENDED_ARTIFACTS,
 ];
