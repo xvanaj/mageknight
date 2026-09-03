@@ -157,7 +157,7 @@ export const EXTENDED_ARTIFACTS = [
   {id:'druidic-staff',name:'Druidic Staff',color:'green',type:'artifact',basic:{druidicStaff:'basic'},strong:{druidicStaff:'strong'}},
   {id:'banner-of-fear',name:'Banner of Fear',color:'red',type:'artifact',basic:{bannerFear:true},strong:{enemyControl:{skipAttack:true,excludeArcane:true}}},
   {id:'banner-of-protection',name:'Banner of Protection',color:'blue',type:'artifact',basic:{bannerProtection:{armor:1,resistances:['fire','ice']}},strong:{bannerProtectionWounds:true}},
-  {id:'bow-of-stars',name:'Bow of Stars',color:'white',type:'artifact',basic:{ranged:6},strong:{siege:9}},
+  {id:'bow-of-stars',name:'Bow of Starsdawn',color:'white',type:'artifact',basic:{bowDiscard:true},strong:{bowTransform:true}},
   {id:'ring-of-proficiency',name:'Ring of Proficiency',color:'white',type:'artifact',basic:{any:4},strong:{any:8}},
   {id:'ruby-ring',name:'Ruby Ring',color:'red',type:'artifact',basic:{fireAttack:5},strong:{fireAttack:9}},
   {id:'sapphire-ring',name:'Sapphire Ring',color:'blue',type:'artifact',basic:{iceAttack:5},strong:{iceAttack:9}},
