@@ -34,6 +34,8 @@ const effectText = effect => Object.entries(effect).map(([k,v]) => {
   if (k === 'manaMeltdown') return v==='basic'?'each opponent randomly loses a crystal; recover one of those crystals':'choose a color; every player suffers Wounds equal to owned crystals, then gain two';
   if (k === 'manaClaim') return v.curse?'claim a basic Source die; choose 3 mana now or 1 each future turn; other players are wounded when spending that color':'claim a basic Source die; choose 3 mana now or 1 each future turn';
   if (k === 'mindRead') return v.steal?'gain a chosen crystal; opponents discard or reveal; steal one discarded Action':'gain a chosen crystal; opponents discard a matching Spell or Action, or reveal their hand';
+  if (k === 'cure') return `remove up to ${v} Wounds from your hand and draw one card for each`;
+  if (k === 'disease') return 'set every fully blocked enemy to Armor 1 for this combat';
   if (k === 'energyFlow') return v.heal?'ready one of your Units and heal one of its Wounds; optionally spend one level III or lower Unit per opponent':'ready one of your Units; optionally spend one level II or lower Unit per opponent';
   if (k === 'meditation') return v==='random'?'randomly recover two discarded cards; draw two over your limit this turn':'choose up to two discarded cards; draw two over your limit this turn';
   if (k === 'callToArms') return v==='borrow'?'invoke one free ability printed on a Unit in the offer':'recruit one Unit from the offer for free';
