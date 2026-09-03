@@ -154,7 +154,7 @@ export const EXTENDED_ARTIFACTS = [
   {id:'golden-grail',name:'Golden Grail',color:'white',type:'artifact',basic:{heal:2,goldenGrail:'fame'},strong:{heal:6,goldenGrail:'draw'}},
   {id:'book-of-wisdom',name:'Book of Wisdom',color:'blue',type:'artifact',basic:{bookWisdom:'advanced'},strong:{bookWisdom:'spell'}},
   {id:'banner-of-courage',name:'Banner of Courage',color:'white',type:'artifact',basic:{bannerCourage:true},strong:{readyAllUnits:true}},
-  {id:'druidic-staff',name:'Druidic Staff',color:'green',type:'artifact',basic:{move:5},strong:{move:8}},
+  {id:'druidic-staff',name:'Druidic Staff',color:'green',type:'artifact',basic:{druidicStaff:'basic'},strong:{druidicStaff:'strong'}},
   {id:'banner-of-fear',name:'Banner of Fear',color:'red',type:'artifact',basic:{influence:5},strong:{attack:8}},
   {id:'banner-of-protection',name:'Banner of Protection',color:'blue',type:'artifact',basic:{block:6},strong:{iceBlock:9}},
   {id:'bow-of-stars',name:'Bow of Stars',color:'white',type:'artifact',basic:{ranged:6},strong:{siege:9}},
