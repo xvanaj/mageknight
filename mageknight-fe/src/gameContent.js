@@ -140,7 +140,7 @@ export const EXTENDED_SPELLS = [
   {id:'wings-of-wind',name:'Wings of Wind',color:'white',type:'spell',basic:{options:[{id:'flight-1',label:'Flight 1',effect:{move:1,movementRule:{all:{replace:1}},ignoreRampagers:true,noExploration:true}},{id:'flight-2',label:'Flight 2',effect:{move:2,movementRule:{all:{replace:1}},ignoreRampagers:true,noExploration:true}},{id:'flight-3',label:'Flight 3',effect:{move:3,movementRule:{all:{replace:1}},ignoreRampagers:true,noExploration:true}},{id:'flight-4',label:'Flight 4',effect:{move:4,movementRule:{all:{replace:1}},ignoreRampagers:true,noExploration:true}},{id:'flight-5',label:'Flight 5',effect:{move:5,movementRule:{all:{replace:1}},ignoreRampagers:true,noExploration:true}}]},strong:{wingsOfNight:true}},
   {id:'mana-claim',name:'Mana Claim',color:'blue',type:'spell',competitive:true,basic:{manaClaim:{curse:false}},strong:{manaClaim:{curse:true}}},
   {id:'energy-flow',name:'Energy Flow',color:'green',type:'spell',competitive:true,basic:{energyFlow:{heal:false,opponentMaxLevel:2}},strong:{energyFlow:{heal:true,opponentMaxLevel:3}}},
-  {id:'mind-read',name:'Mind Read',color:'white',type:'spell',competitive:true,basic:{influence:5},strong:{influence:9}},
+  {id:'mind-read',name:'Mind Read',color:'white',type:'spell',competitive:true,basic:{mindRead:{steal:false}},strong:{mindRead:{steal:true}}},
   {id:'whirlwind',name:'Whirlwind',color:'white',type:'spell',basic:{enemyControl:{skipAttack:true}},strong:{defeatTarget:{attackPhaseOnly:true}}},
   {id:'mana-meltdown',name:'Mana Meltdown',color:'red',type:'spell',competitive:true,basic:{manaMeltdown:'basic'},strong:{manaMeltdown:'strong'}},
 ];
