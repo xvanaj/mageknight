@@ -161,7 +161,7 @@ export const EXTENDED_ARTIFACTS = [
   {id:'ring-of-proficiency',name:'Circlet of Proficiency',color:'white',type:'artifact',basic:{circlet:'basic'},strong:{circlet:'strong'}},
   {id:'ruby-ring',name:'Ruby Ring',color:'red',type:'artifact',basic:{manaRing:{color:'red',mode:'basic'}},strong:{manaRing:{color:'red',mode:'strong'}}},
   {id:'sapphire-ring',name:'Sapphire Ring',color:'blue',type:'artifact',basic:{manaRing:{color:'blue',mode:'basic'}},strong:{manaRing:{color:'blue',mode:'strong'}}},
-  {id:'shield-of-fallen-kings',name:'Shield of Fallen Kings',color:'blue',type:'artifact',basic:{block:7},strong:{block:11}},
+  {id:'shield-of-fallen-kings',name:'Shield of the Fallen Kings',color:'blue',type:'artifact',basic:{options:[{id:'single',label:'Block 6',effect:{block:6}},{id:'split',label:'Block 4 against two attacks',effect:{multiBlock:{stat:'block',value:4,uses:2}}}]},strong:{options:[{id:'single',label:'Cold Fire Block 8',effect:{coldfireBlock:8}},{id:'split',label:'Cold Fire Block 4 against three attacks',effect:{multiBlock:{stat:'coldfireBlock',value:4,uses:3}}}]}},
   {id:'emerald-ring',name:'Emerald Ring',color:'green',type:'artifact',basic:{heal:3,move:3},strong:{heal:6,move:6}},
 ];
 
