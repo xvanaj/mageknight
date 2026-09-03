@@ -128,7 +128,7 @@ export const EXTENDED_ACTIONS = [
 export const EXTENDED_SPELLS = [
   {id:'snowstorm',name:'Snowstorm',color:'blue',type:'spell',basic:{iceRanged:5},strong:{iceSiege:8,woundCost:1}},
   {id:'flame-wall',name:'Flame Wall',color:'red',type:'spell',basic:{options:[{id:'attack',label:'Fire Attack 5',effect:{fireAttack:5}},{id:'block',label:'Fire Block 7',effect:{fireBlock:7}}]},strong:{options:[{id:'attack',label:'Fire Attack 7',effect:{fireAttack:7}},{id:'block',label:'Fire Block 9',effect:{fireBlock:9}}]}},
-  {id:'call-to-arms',name:'Call to Arms',color:'white',type:'spell',basic:{influence:5},strong:{anyCombat:6}},
+  {id:'call-to-arms',name:'Call to Arms',color:'white',type:'spell',basic:{callToArms:'borrow'},strong:{callToArms:'recruit'}},
   {id:'tremor',name:'Tremor',color:'red',type:'spell',basic:{options:[{id:'target',label:'One enemy: Armor -3',effect:{armorChange:{amount:-3,minimum:1}}},{id:'all',label:'All enemies: Armor -2',effect:{allArmorChange:{amount:-2,minimum:1}}}]},strong:{options:[{id:'target',label:'One enemy: Armor -3, or -6 if fortified',effect:{armorChange:{amount:-3,fortifiedAmount:-6,minimum:1}}},{id:'all',label:'All enemies: Armor -2, or -4 if fortified',effect:{allArmorChange:{amount:-2,fortifiedAmount:-4,minimum:1}}}]}},
   {id:'space-bending',name:'Space Bending',color:'blue',type:'spell',basic:{spaceBending:true,ignoreRampagers:true},strong:{timeBending:true}},
   {id:'demolish',name:'Demolish',color:'red',type:'spell',basic:{allArmorChange:{amount:-1,minimum:1,exclude:'fire-resistant'},exposeAll:'fortification'},strong:{defeatTarget:{exclude:'fire-resistant',excludeArcane:true},allArmorChange:{amount:-1,minimum:1,exclude:'fire-resistant'}}},
