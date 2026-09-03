@@ -16,6 +16,7 @@ const effectText = effect => Object.entries(effect).map(([k,v]) => {
   if (k === 'noExploration') return 'cannot explore this turn';
   if (k === 'spaceBending') return 'spaces and tile placements two hexes away count as adjacent this turn';
   if (k === 'timeBending') return 'return other played cards to hand, skip drawing, and immediately take another turn';
+  if (k === 'mistVeil') return 'all Units gain every resistance; prevent the next Wound dealt to your Hero';
   if (k === 'handLimitBonus') return `hand limit +${v} this turn`;
   if (k === 'additionalMana') return `pay ${v} mana too`;
   if (k === 'attackPerBlocked') return `Attack ${v.base} + ${v.per} per blocked enemy`;
