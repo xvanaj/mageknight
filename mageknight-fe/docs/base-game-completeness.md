@@ -33,7 +33,7 @@ Primary references:
 | Solo Conquest | Implemented through one-player Full Conquest | Final rule-by-rule audit |
 | Blitz Conquest | Implemented | Final rule-by-rule audit |
 | Full Cooperation | Implemented | Final rule-by-rule audit |
-| Blitz Cooperation | Missing | Setup, bonuses, city levels, end and scoring |
+| Blitz Cooperation | Implemented | Verify city levels follow reveal order during the final scenario audit |
 | Mines Liberation | Missing | Controlled mines, liberation battles, production and scoring |
 | Dungeon Lords | Missing | Secret entrances, repeated conquests, end and scoring |
 | Druid Nights | Missing | Glade claims, incantations, rewards, end and scoring |
