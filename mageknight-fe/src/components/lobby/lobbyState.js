@@ -9,6 +9,7 @@ export const CHARACTERS = [
 ];
 
 export const SCENARIOS = [
+  { id: 'first-reconnaissance', name: 'First Reconnaissance', detail: 'Training mission: reveal the capital; cities cannot be entered or conquered.' },
   { id: 'full-conquest', name: 'Full Conquest', detail: 'Six rounds; solo uses two cities, multiplayer uses one level-4 city per player.' },
   { id: 'blitz-conquest', name: 'Blitz Conquest', detail: 'Four rounds, level-3 cities, bonus Fame and Reputation, plus larger offers.' },
   { id: 'cooperative-conquest', name: 'Full Cooperation', detail: 'Solo Conquest for one, or the official cooperative setup for two or three players.' },
