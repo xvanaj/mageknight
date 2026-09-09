@@ -37,7 +37,7 @@ Primary references:
 | Mines Liberation | Implemented | Final end-to-end and map-shape audit |
 | Dungeon Lords | Implemented | Final end-to-end and map-shape audit |
 | Druid Nights | Implemented | Final end-to-end and map-shape audit |
-| One to Return | Missing | Closed portal, elimination, final occupation victory |
+| One to Return | Implemented | Final end-to-end and map-shape audit |
 
 ## Content inventory
 

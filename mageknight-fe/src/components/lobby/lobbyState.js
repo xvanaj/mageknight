@@ -17,6 +17,7 @@ export const SCENARIOS = [
   { id: 'mines-liberation', name: 'Mines Liberation', detail: 'Four-round competitive mission: clear every mine and restore crystal production.' },
   { id: 'dungeon-lords', name: 'Dungeon Lords', detail: 'Five-round competitive mission with secret underground sites and tunnel travel.' },
   { id: 'druid-nights', name: 'Druid Nights', detail: 'Four-round competitive mission: claim magical glades and perform two night incantations.' },
+  { id: 'one-to-return', name: 'One to Return', detail: 'Four-round elimination mission: return to the closed portal when the second Night ends.' },
 ];
 
 export const createLobby = (gameId, host) => ({
@@ -62,6 +63,7 @@ export const canStartLobby = lobby => {
   if(lobby.scenario==='mines-liberation'&&(count<2||count>4))return false;
   if(lobby.scenario==='dungeon-lords'&&(count<2||count>4))return false;
   if(lobby.scenario==='druid-nights'&&(count<2||count>4))return false;
+  if(lobby.scenario==='one-to-return'&&(count<2||count>4))return false;
   return lobby.players.every(player=>player.connected&&player.character&&player.ready);
 };
 
