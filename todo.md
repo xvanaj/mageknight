@@ -1,0 +1,1 @@
+is there reset button to reset round? MK allows resetting everything that was done to the point where something new was discovedred (new tile, monster revealed, dice rerolled....)
