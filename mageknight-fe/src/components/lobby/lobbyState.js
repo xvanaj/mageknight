@@ -15,6 +15,7 @@ export const SCENARIOS = [
   { id: 'cooperative-conquest', name: 'Full Cooperation', detail: 'Solo Conquest for one, or the official cooperative setup for two or three players.' },
   { id: 'blitz-cooperation', name: 'Blitz Cooperation', detail: 'Four-round cooperative mission for two or three players with escalating cities and Blitz bonuses.' },
   { id: 'mines-liberation', name: 'Mines Liberation', detail: 'Four-round competitive mission: clear every mine and restore crystal production.' },
+  { id: 'dungeon-lords', name: 'Dungeon Lords', detail: 'Five-round competitive mission with secret underground sites and tunnel travel.' },
 ];
 
 export const createLobby = (gameId, host) => ({
@@ -58,6 +59,7 @@ export const canStartLobby = lobby => {
   if(lobby.scenario==='cooperative-conquest'&&count>3)return false;
   if(lobby.scenario==='blitz-cooperation'&&(count<2||count>3))return false;
   if(lobby.scenario==='mines-liberation'&&(count<2||count>4))return false;
+  if(lobby.scenario==='dungeon-lords'&&(count<2||count>4))return false;
   return lobby.players.every(player=>player.connected&&player.character&&player.ready);
 };
 

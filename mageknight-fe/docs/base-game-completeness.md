@@ -35,7 +35,7 @@ Primary references:
 | Full Cooperation | Implemented | Final rule-by-rule audit |
 | Blitz Cooperation | Implemented | Verify city levels follow reveal order during the final scenario audit |
 | Mines Liberation | Implemented | Final end-to-end and map-shape audit |
-| Dungeon Lords | Missing | Secret entrances, repeated conquests, end and scoring |
+| Dungeon Lords | Implemented | Final end-to-end and map-shape audit |
 | Druid Nights | Missing | Glade claims, incantations, rewards, end and scoring |
 | One to Return | Missing | Closed portal, elimination, final occupation victory |
 
