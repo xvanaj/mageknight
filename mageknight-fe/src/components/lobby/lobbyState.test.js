@@ -12,7 +12,7 @@ test('a host can start a solo game after choosing a character and readying up', 
   expect(updateLobby(lobby, { type: 'START' }).status).toBe('playing');
 });
 
-test.each(SCENARIOS.filter(scenario=>scenario.id!=='blitz-cooperation').map(scenario => [scenario.name, scenario.id]))('%s permits one ready player', (_name, scenario) => {
+test.each(SCENARIOS.filter(scenario=>!['blitz-cooperation','mines-liberation'].includes(scenario.id)).map(scenario => [scenario.name, scenario.id]))('%s permits one ready player', (_name, scenario) => {
   let lobby = createLobby('SOLO1234', host);
   lobby = updateLobby(lobby, { type: 'SET_SCENARIO', scenario });
   lobby = updateLobby(lobby, { type: 'SELECT_CHARACTER', playerId: host.id, character: 'tovak' });
@@ -63,4 +63,11 @@ test('Blitz Cooperation requires two or three ready players', () => {
   expect(canStartLobby({ scenario: 'blitz-cooperation', players: ready(2) })).toBe(true);
   expect(canStartLobby({ scenario: 'blitz-cooperation', players: ready(3) })).toBe(true);
   expect(canStartLobby({ scenario: 'blitz-cooperation', players: ready(4) })).toBe(false);
+});
+
+test('Mines Liberation requires two to four ready players', () => {
+  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `m${index}`, connected: true, character: `m${index}`, ready: true }));
+  expect(canStartLobby({ scenario: 'mines-liberation', players: ready(1) })).toBe(false);
+  expect(canStartLobby({ scenario: 'mines-liberation', players: ready(2) })).toBe(true);
+  expect(canStartLobby({ scenario: 'mines-liberation', players: ready(4) })).toBe(true);
 });
