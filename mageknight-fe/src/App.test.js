@@ -33,6 +33,8 @@ test.each(TACTICS.day)('a solo host can play and finish a turn after choosing $n
 
   await screen.findByRole('heading', { name: /choose your tactic/i });
   fireEvent.click(screen.getByRole('button', { name: new RegExp(tactic.name, 'i') }));
+  if(tactic.id==='rethink')fireEvent.click(await screen.findByRole('button',{name:/choose rethink/i}));
+  if(tactic.id==='mana-steal')fireEvent.click((await screen.findAllByRole('button',{name:/reserve until used/i}))[0]);
   await screen.findByRole('heading', { name: /action phase/i });
 
   await waitFor(() => expect(screen.getByTestId('game-shell')).not.toHaveClass('not-my-turn'));
