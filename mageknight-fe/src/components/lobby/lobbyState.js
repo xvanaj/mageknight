@@ -3,9 +3,6 @@ export const CHARACTERS = [
   { id: 'arythea', name: 'Arythea', color: 'red', title: 'The Blood Cultist' },
   { id: 'goldyx', name: 'Goldyx', color: 'gold', title: 'The Draconum Mystic' },
   { id: 'norowas', name: 'Norowas', color: 'green', title: 'The Elven Commander' },
-  { id: 'wolfhawk', name: 'Wolfhawk', color: 'white', title: 'The Lone Hunter' },
-  { id: 'krang', name: 'Krang', color: 'orange', title: 'The Chaos Shaman' },
-  { id: 'braevalar', name: 'Braevalar', color: 'teal', title: 'The Storm Druid' },
 ];
 
 export const SCENARIOS = [
@@ -42,6 +39,7 @@ export function updateLobby(lobby, action) {
     case 'DISCONNECT':
       return { ...lobby, players: lobby.players.map(player => player.id === action.playerId ? { ...player, connected: false, ready: false } : player) };
     case 'SELECT_CHARACTER': {
+      if (!CHARACTERS.some(character => character.id === action.character)) return lobby;
       if (lobby.players.some(player => player.id !== action.playerId && player.character === action.character)) return lobby;
       return { ...lobby, players: lobby.players.map(player => player.id === action.playerId ? { ...player, character: action.character, ready: false } : player) };
     }
@@ -66,7 +64,8 @@ export const canStartLobby = lobby => {
   if(lobby.scenario==='druid-nights'&&(count<2||count>4))return false;
   if(lobby.scenario==='conquer-and-hold'&&![2,4].includes(count))return false;
   if(lobby.scenario==='one-to-return'&&(count<2||count>4))return false;
-  return lobby.players.every(player=>player.connected&&player.character&&player.ready);
+  const baseCharacters=new Set(CHARACTERS.map(character=>character.id));
+  return lobby.players.every(player=>player.connected&&baseCharacters.has(player.character)&&player.ready);
 };
 
 const GUEST_ACTIONS = new Set(['SELECT_CHARACTER', 'SET_READY', 'LEAVE']);

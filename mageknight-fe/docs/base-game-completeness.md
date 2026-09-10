@@ -42,7 +42,7 @@ Primary references:
 
 ## Content inventory
 
-The implementation catalog exposes 31 Advanced Actions, 24 Spells, 21 Artifacts, 40 Unit cards, seven Heroes, 12 base Ruin tokens, 19 map tiles plus the portal, and all enemy-token categories. Original scenarios now use explicit numbered base-game manifests: 28 Advanced Actions, 20 Spells, 16 Artifacts, 20 Regular Units, 20 Elite Units, and the four original Heroes. Expansion cards remain in the catalog for their behavior tests but are excluded from original scenario supplies. First Reconnaissance further limits its Advanced Action deck to original cards 1–16.
+The implementation catalog exposes 31 Advanced Actions, 24 Spells, 21 Artifacts, 40 Unit cards, seven Hero definitions, 12 base Ruin tokens, 19 map tiles plus the portal, and all enemy-token categories. Original scenarios now use explicit numbered base-game manifests: 28 Advanced Actions, 20 Spells, 16 Artifacts, 20 Regular Units, 20 Elite Units, and the four original Heroes. The lobby offers only Tovak, Arythea, Goldyx, and Norowas and rejects stale or forged expansion-Hero selections. Expansion definitions remain in the internal catalog for their behavior tests but are excluded from original scenario supplies. First Reconnaissance further limits its Advanced Action deck to original cards 1–16.
 
 ## Completion gate
 

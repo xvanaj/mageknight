@@ -1,4 +1,4 @@
-import { canStartLobby, createLobby, guestLobbyAction, SCENARIOS, updateLobby } from './lobbyState';
+import { canStartLobby, CHARACTERS, createLobby, guestLobbyAction, SCENARIOS, updateLobby } from './lobbyState';
 
 const host = { id: 'host', name: 'Host' };
 const guest = { id: 'guest', name: 'Guest' };
@@ -40,6 +40,14 @@ test('a character already selected by another player cannot be claimed', () => {
   expect(lobby.players.find(player => player.id === guest.id).character).toBeNull();
 });
 
+test('the original game lobby exposes and accepts only the four base Heroes', () => {
+  expect(CHARACTERS.map(character => character.id)).toEqual(['tovak', 'arythea', 'goldyx', 'norowas']);
+  let lobby = createLobby('BASE1234', host);
+  lobby = updateLobby(lobby, { type: 'SELECT_CHARACTER', playerId: host.id, character: 'wolfhawk' });
+  expect(lobby.players[0].character).toBeNull();
+  expect(canStartLobby({ scenario: 'full-conquest', players: [{ ...host, connected: true, character: 'wolfhawk', ready: true }] })).toBe(false);
+});
+
 test('guest lobby actions are bound to the authenticated player', () => {
   expect(guestLobbyAction({ type: 'SET_READY', playerId: host.id, ready: true }, guest.id)).toEqual({ type: 'SET_READY', playerId: guest.id, ready: true });
   expect(guestLobbyAction({ type: 'SELECT_CHARACTER', playerId: host.id, character: 'arythea' }, guest.id)).toEqual({ type: 'SELECT_CHARACTER', playerId: guest.id, character: 'arythea' });
@@ -52,13 +60,13 @@ test('host-only and forged join actions are rejected for authenticated guests', 
 });
 
 test('official Full Cooperation setup rejects a fourth actual player', () => {
-  const players = Array.from({ length: 4 }, (_, index) => ({ id: `p${index}`, connected: true, character: `c${index}`, ready: true }));
+  const players = Array.from({ length: 4 }, (_, index) => ({ id: `p${index}`, connected: true, character: CHARACTERS[index].id, ready: true }));
   expect(canStartLobby({ scenario: 'cooperative-conquest', players })).toBe(false);
   expect(canStartLobby({ scenario: 'full-conquest', players })).toBe(true);
 });
 
 test('Blitz Cooperation requires two or three ready players', () => {
-  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `p${index}`, connected: true, character: `c${index}`, ready: true }));
+  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `p${index}`, connected: true, character: CHARACTERS[index].id, ready: true }));
   expect(canStartLobby({ scenario: 'blitz-cooperation', players: ready(1) })).toBe(false);
   expect(canStartLobby({ scenario: 'blitz-cooperation', players: ready(2) })).toBe(true);
   expect(canStartLobby({ scenario: 'blitz-cooperation', players: ready(3) })).toBe(true);
@@ -66,35 +74,35 @@ test('Blitz Cooperation requires two or three ready players', () => {
 });
 
 test('Mines Liberation requires two to four ready players', () => {
-  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `m${index}`, connected: true, character: `m${index}`, ready: true }));
+  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `m${index}`, connected: true, character: CHARACTERS[index].id, ready: true }));
   expect(canStartLobby({ scenario: 'mines-liberation', players: ready(1) })).toBe(false);
   expect(canStartLobby({ scenario: 'mines-liberation', players: ready(2) })).toBe(true);
   expect(canStartLobby({ scenario: 'mines-liberation', players: ready(4) })).toBe(true);
 });
 
 test('Dungeon Lords requires two to four ready players', () => {
-  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `d${index}`, connected: true, character: `d${index}`, ready: true }));
+  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `d${index}`, connected: true, character: CHARACTERS[index].id, ready: true }));
   expect(canStartLobby({ scenario: 'dungeon-lords', players: ready(1) })).toBe(false);
   expect(canStartLobby({ scenario: 'dungeon-lords', players: ready(2) })).toBe(true);
   expect(canStartLobby({ scenario: 'dungeon-lords', players: ready(4) })).toBe(true);
 });
 
 test('Druid Nights requires two to four ready players', () => {
-  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `n${index}`, connected: true, character: `n${index}`, ready: true }));
+  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `n${index}`, connected: true, character: CHARACTERS[index].id, ready: true }));
   expect(canStartLobby({ scenario: 'druid-nights', players: ready(1) })).toBe(false);
   expect(canStartLobby({ scenario: 'druid-nights', players: ready(2) })).toBe(true);
   expect(canStartLobby({ scenario: 'druid-nights', players: ready(4) })).toBe(true);
 });
 
 test('One to Return requires two to four ready players', () => {
-  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `o${index}`, connected: true, character: `o${index}`, ready: true }));
+  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `o${index}`, connected: true, character: CHARACTERS[index].id, ready: true }));
   expect(canStartLobby({ scenario: 'one-to-return', players: ready(1) })).toBe(false);
   expect(canStartLobby({ scenario: 'one-to-return', players: ready(2) })).toBe(true);
   expect(canStartLobby({ scenario: 'one-to-return', players: ready(4) })).toBe(true);
 });
 
 test('Conquer and Hold requires either two players or two teams of two', () => {
-  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `h${index}`, connected: true, character: `h${index}`, ready: true }));
+  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `h${index}`, connected: true, character: CHARACTERS[index].id, ready: true }));
   expect(canStartLobby({ scenario: 'conquer-and-hold', players: ready(1) })).toBe(false);
   expect(canStartLobby({ scenario: 'conquer-and-hold', players: ready(2) })).toBe(true);
   expect(canStartLobby({ scenario: 'conquer-and-hold', players: ready(3) })).toBe(false);
