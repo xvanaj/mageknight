@@ -13,7 +13,7 @@ Primary references:
 | Area | Engine | UI | Tests | Remaining audit |
 | --- | --- | --- | --- | --- |
 | Round setup, tactics, turn order, end-of-round announcement | Implemented | Implemented | Covered | Check every tie and final-turn interaction |
-| Deed cards, mana, Source, crystals | Implemented | Implemented | Covered | Card-by-card audit remains |
+| Deed cards, mana, Source, crystals | Implemented | Implemented | Covered | Individual printed effects remain under card-by-card regression coverage |
 | Movement, exploration, Day/Night terrain | Implemented | Implemented | Covered | Audit map-shape placement restrictions |
 | Sites and interaction | Implemented | Implemented | Covered | Recheck every Site Description card |
 | Enemy combat and abilities | Implemented | Implemented | Covered | Token-by-token audit remains |
@@ -28,7 +28,7 @@ Primary references:
 
 | Scenario | Status | Remaining work |
 | --- | --- | --- |
-| First Reconnaissance | Implemented | Verify delayed offer reveal and numbered countryside order |
+| First Reconnaissance | Implemented | Complete: numbered countryside order, cards 1–16, delayed offers, regular Units, final turns, and scoring are covered |
 | Full Conquest | Implemented | Final rule-by-rule audit |
 | Solo Conquest | Implemented through one-player Full Conquest | Final rule-by-rule audit |
 | Blitz Conquest | Implemented | Final rule-by-rule audit |
@@ -42,7 +42,7 @@ Primary references:
 
 ## Content inventory
 
-The runtime currently exposes 31 Advanced Actions, 24 Spells, 21 Artifacts, 40 Unit cards, seven Heroes, 12 base Ruin tokens, 19 map tiles plus the portal, and all enemy-token categories. Some content comes from expansions and remains available while the original base-game subset is audited. Exact base/expansion provenance must be recorded before this section can be marked complete.
+The implementation catalog exposes 31 Advanced Actions, 24 Spells, 21 Artifacts, 40 Unit cards, seven Heroes, 12 base Ruin tokens, 19 map tiles plus the portal, and all enemy-token categories. Original scenarios now use explicit numbered base-game manifests: 28 Advanced Actions, 20 Spells, 16 Artifacts, 20 Regular Units, 20 Elite Units, and the four original Heroes. Expansion cards remain in the catalog for their behavior tests but are excluded from original scenario supplies. First Reconnaissance further limits its Advanced Action deck to original cards 1–16.
 
 ## Completion gate
 
