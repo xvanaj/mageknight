@@ -53,4 +53,4 @@ Automated inventory tests reject duplicate physical identities, missing copies, 
 
 ## Validation gate
 
-The completion gate is a clean production build plus the full automated test suite. The suite covers rules behavior, all eleven scenario configurations, original component inventories, multiplayer privacy, lobby restrictions, and representative application rendering. The current verified baseline is 523 passing tests in four suites and a successful optimized production build.
+The completion gate is a clean production build plus the full automated test suite. The suite covers rules behavior, all eleven scenario configurations, original component inventories, multiplayer privacy, lobby restrictions, and representative application rendering. The current verified baseline is 527 passing tests in four suites and a successful optimized production build.
