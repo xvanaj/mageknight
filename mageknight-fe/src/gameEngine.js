@@ -69,6 +69,18 @@ export const TOVAK_SKILLS = [
   { id:'mana-overload', name:'Mana Overload', cadence:'round', description:'Once a round: gain a basic mana token; the next card powered with that color gets +4 to one Move, Influence, Attack, or Block effect.' },
 ];
 export const BASE_TOVAK_SKILLS = [...TOVAK_SKILLS.slice(0,-1),{id:'mana-exploit',name:'Mana Exploit',cadence:'round',interactive:true,description:'Once a round: gain a non-gold mana token. Until your next turn, rivals gain one Wound for each different other basic mana color they use.'}];
+export const BASE_ARYTHEA_SKILLS = [
+  {id:'dark-paths',name:'Dark Paths',cadence:'turn',description:'Once a turn: Move 1 by Day or Move 2 by Night/underground.'},
+  {id:'burning-power',name:'Burning Power',cadence:'turn',modes:['physical','fire'],description:'Once a turn: Siege Attack 1 or Fire Siege Attack 1.'},
+  {id:'hot-swordsmanship',name:'Hot Swordsmanship',cadence:'turn',modes:['physical','fire'],description:'Once a turn: Attack 2 or Fire Attack 2.'},
+  {id:'dark-negotiation',name:'Dark Negotiation',cadence:'turn',description:'Once a turn: Influence 2 by Day or Influence 3 by Night/underground.'},
+  {id:'dark-fire-magic',name:'Dark Fire Magic',cadence:'round',description:'Once a round: gain a red crystal and a red or black mana token.'},
+  {id:'power-of-pain',name:'Power of Pain',cadence:'turn',description:'Once a turn: play a Wound sideways for Move, Influence, Attack, or Block 2.'},
+  {id:'invocation',name:'Invocation',cadence:'turn',description:'Once a turn: discard a Wound for red or black mana, or another card for green or white mana.'},
+  {id:'polarization',name:'Polarization',cadence:'turn',description:'Once a turn: use one mana as its opposite color (red/blue, white/green, black/gold).'},
+  {id:'arythea-motivation',name:'Motivation',cadence:'round',manaColor:'red',description:'Once a round: draw two cards; if you have the least Fame, also gain a red mana token.'},
+  {id:'healing-ritual',name:'Healing Ritual',cadence:'round',interactive:true,description:'Once a round outside combat: heal up to two Wounds from hand, giving one to a closest rival when required.'},
+];
 
 export { CHARACTER_PROFILES };
 
@@ -394,7 +406,7 @@ const makePlayer=(seed,character='tovak',name)=>{
   return {name:profile.name||name||'Mage Knight',character,q:0,r:0,fame:0,reputation:0,level:1,armor:profile.armor||2,command:1,deck:deck.slice(5),hand:deck.slice(0,5),discard:[],played:[],removed:[],setAside:[],timeBentTurn:false,nextRoundHandBonus:0,wounds:0,woundsReceivedThisTurn:[],crystals:{blue:0,red:0,green:0,white:0},crystalsSpentThisTurn:{blue:0,red:0,green:0,white:0},units:[],keeps:0,cities:0,skills:[],defeated:[],assaults:0,pvpWins:0,druidIncantations:[],tactic:null,tacticUsed:false,extraTurn:false,carry:null,skipNextTurn:false,roundOrderFaceDown:false,plunderedBetweenTurns:false,cardsPlayedThisTurn:0,atTurnStart:false,emptyHandPassAllowed:false,movedThisTurn:false,moveHistory:[],turnAction:null,cityInfluenceApplied:false};
 };
 
-const skillsForCharacter=(character,removeCompetitive=false)=>{const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;if(character==='tovak')return removeCompetitive?TOVAK_SKILLS.slice(0,-1):BASE_TOVAK_SKILLS;return (profile.skills||[]).filter(skill=>!removeCompetitive||!skill.interactive);};
+const skillsForCharacter=(character,removeCompetitive=false)=>{const profile=CHARACTER_PROFILES[character]||CHARACTER_PROFILES.tovak;if(character==='tovak')return removeCompetitive?TOVAK_SKILLS.slice(0,-1):BASE_TOVAK_SKILLS;if(character==='arythea')return removeCompetitive?BASE_ARYTHEA_SKILLS.slice(0,-1):BASE_ARYTHEA_SKILLS;return (profile.skills||[]).filter(skill=>!removeCompetitive||!skill.interactive);};
 
 export function createGame(seed = 20260901, options = {}) {
   const source = rollSource(3,'day',seed+9);
@@ -1238,7 +1250,27 @@ function activateSkill(state,action){
   if(skill.id==='i-feel-no-pain'){if(state.combat)return fail(state,'I Feel No Pain cannot be used during combat.');const i=state.player.hand.findIndex(c=>c.id==='wound');if(i<0)return fail(state,'You need a Wound in hand.');state.player.discard.push(state.player.hand.splice(i,1)[0]);draw(state,1);return mark();}
   if(skill.id==='i-dont-give-a-damn'){state.bonuses.sideways={value:2,advancedValue:3,skill:skill.id};return mark();}
   if(skill.id==='who-needs-magic'){state.bonuses.sideways={value:state.sourceTaken?2:3,skill:skill.id};if(!state.sourceTaken)state.bonuses.sourceForbidden=true;return mark();}
-  if(skill.id==='motivation'){if(state.combat)return fail(state,'Motivation cannot be used during combat.');draw(state,2);const rivals=(state.players||[]).filter(player=>player.id!==state.player.id),lowest=!rivals.length||rivals.every(player=>state.player.fame<player.fame);if(lowest)state.mana.push(skill.manaColor||'blue');return mark();}
+  if(skill.id==='dark-paths'){if(!['action','cooperative-entry'].includes(state.phase))return fail(state,'Dark Paths is used outside combat.');state.points.move+=effectiveTime(state)==='night'?2:1;return mark();}
+  if(skill.id==='burning-power'){if(!['combat-ranged','combat-attack'].includes(state.phase))return fail(state,'Burning Power is a combat Skill.');if(!skill.modes.includes(action.mode))return fail(state,'Choose physical or fire Siege Attack.');state.points[action.mode==='fire'?'fireSiege':'siege']++;return mark();}
+  if(skill.id==='hot-swordsmanship'){if(state.phase!=='combat-attack')return fail(state,'Hot Swordsmanship is used in the Attack phase.');if(!skill.modes.includes(action.mode))return fail(state,'Choose physical or fire Attack.');state.points[action.mode==='fire'?'fireAttack':'attack']+=2;return mark();}
+  if(skill.id==='dark-negotiation'){if(state.phase!=='action')return fail(state,'Dark Negotiation is used outside combat.');state.points.influence+=effectiveTime(state)==='night'?3:2;return mark();}
+  if(skill.id==='dark-fire-magic'){if(!['red','black'].includes(action.color))return fail(state,'Choose red or black mana.');gainCrystal(state,'red');state.mana.push(action.color);return mark();}
+  if(skill.id==='power-of-pain'){
+    const allowed={action:['move','influence'],'cooperative-entry':['move'],'combat-block':['block'],'combat-attack':['attack']}[state.phase]||[];if(!allowed.includes(action.mode))return fail(state,allowed.length?'Choose a Power of Pain effect available in this phase.':'Power of Pain cannot be used in this phase.');
+    const index=state.player.hand.findIndex(card=>card.uid===action.woundUid&&card.id==='wound');if(index<0)return fail(state,'Choose a Wound from your hand.');state.player.played.push(state.player.hand.splice(index,1)[0]);state.points[action.mode]+=2;return mark();
+  }
+  if(skill.id==='invocation'){
+    const index=state.player.hand.findIndex(card=>card.uid===action.cardUid),card=state.player.hand[index];if(index<0)return fail(state,'Choose a card from your hand.');const colors=card.id==='wound'?['red','black']:['green','white'];if(!colors.includes(action.color))return fail(state,`That card can only invoke ${colors.join(' or ')} mana.`);state.player.discard.push(state.player.hand.splice(index,1)[0]);state.mana.push(action.color);return mark();
+  }
+  if(skill.id==='polarization'){
+    const opposite={red:'blue',blue:'red',white:'green',green:'white',black:'gold',gold:'black'},from=action.fromColor,to=opposite[from];if(!to||action.toColor!==to)return fail(state,'Choose a color and its opposite.');const tokenIndex=state.mana.indexOf(from);if(tokenIndex>=0)state.mana.splice(tokenIndex,1);else if(COLORS.includes(from)&&(state.player.crystals[from]||0)>0)state.player.crystals[from]--;else return fail(state,`You have no ${from} mana to polarize.`);state.mana.push(to);return mark();
+  }
+  if(skill.id==='healing-ritual'){
+    if(state.phase!=='action'||state.combat)return fail(state,'Healing Ritual is used outside combat.');const ids=[...new Set(action.woundUids||[])];if(!ids.length||ids.length>2)return fail(state,'Choose one or two Wounds from your hand.');const wounds=ids.map(uid=>state.player.hand.find(card=>card.uid===uid&&card.id==='wound'));if(wounds.some(card=>!card))return fail(state,'Choose Wounds from your hand.');
+    const rivals=(state.players||[]).filter(player=>player.id!==state.player.id),minimum=rivals.length?Math.min(...rivals.map(player=>distance(state.player,player))):Infinity,closest=rivals.filter(player=>distance(state.player,player)===minimum),recipient=closest.find(player=>player.id===action.recipientId);const transferRequired=ids.length===2&&closest.length>0&&state.roundEndTurnsRemaining===null;if(action.recipientId&&!recipient)return fail(state,'Choose one of the closest Mage Knights.');if(transferRequired&&!recipient)return fail(state,'One healed Wound must go to a closest Mage Knight.');
+    const removed=[];for(const uid of ids){const index=state.player.hand.findIndex(card=>card.uid===uid);removed.push(state.player.hand.splice(index,1)[0]);}state.player.wounds=Math.max(0,state.player.wounds-ids.length);if(recipient){recipient.discard.push(removed.pop());recipient.wounds++;}applyGoldenGrailHealing(state,state.player,state.bonuses);return mark();
+  }
+  if(skill.id==='motivation'||skill.id.endsWith('-motivation')){draw(state,2);const rivals=(state.players||[]).filter(player=>player.id!==state.player.id),lowest=!rivals.length||rivals.every(player=>state.player.fame<player.fame);if(lowest)state.mana.push(skill.manaColor||'blue');return mark();}
   if(skill.id==='mana-overload'){const color=action.color;if(!COLORS.includes(color))return fail(state,'Choose a basic mana color.');state.mana.push(color);state.bonuses.manaOverload={color};return mark();}
   if(skill.id==='mana-exploit'){const color=action.color;if(!COLORS.includes(color))return fail(state,'Choose a basic mana color.');const ownerId=state.player.id||state.player.character;state.mana.push(color);state.manaExploits=(state.manaExploits||[]).filter(exploit=>exploit.ownerId!==ownerId);state.manaExploits.push({ownerId,color,woundedColors:{}});return mark();}
   if(skill.effect){const modes=legalSkillModes(skill,state.phase),resolved=['any','anyCombat'].includes(skill.effect)?action.mode:skill.effect;if(!modes.includes(resolved))return fail(state,modes.length?'Choose a Skill power available in this phase.':'That Skill cannot be used in this phase.');if(skill.effect==='mana'&&!COLORS.includes(action.color))return fail(state,'Choose a basic mana color.');if(skill.effect==='unitReady'&&!state.player.units.some(unit=>unitMatches(unit,action.unitId)&&unit.spent))return fail(state,'Choose a spent Unit to ready.');if(skill.effect==='armorBreak'){if(!state.combat)return fail(state,'Resistance Break requires an enemy in combat.');if(livingCombatEnemies(state).some(enemy=>(enemy.traits||[]).includes('arcane-immunity')))return fail(state,'Arcane Immunity prevents non-Attack effects from changing this enemy.');const reduction=resistanceCount(state.combat.enemy);if(!reduction)return fail(state,'That enemy has no resistance to break.');state.combat.enemy.armor=Math.max(1,state.combat.enemy.armor-reduction);return mark();}addEffect(state,{[skill.effect]:skill.value},null,{effectAs:action.mode,manaColor:action.color,unitId:action.unitId});return mark();}
