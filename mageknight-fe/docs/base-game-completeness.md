@@ -37,6 +37,7 @@ Primary references:
 | Mines Liberation | Implemented | Final end-to-end and map-shape audit |
 | Dungeon Lords | Implemented | Final end-to-end and map-shape audit |
 | Druid Nights | Implemented | Final end-to-end and map-shape audit |
+| Conquer and Hold | Implemented | Verify the generated connected layout against every coordinate in the illustrated predefined map |
 | One to Return | Implemented | Final end-to-end and map-shape audit |
 
 ## Content inventory

@@ -12,7 +12,7 @@ test('a host can start a solo game after choosing a character and readying up', 
   expect(updateLobby(lobby, { type: 'START' }).status).toBe('playing');
 });
 
-test.each(SCENARIOS.filter(scenario=>!['blitz-cooperation','mines-liberation','dungeon-lords','druid-nights','one-to-return'].includes(scenario.id)).map(scenario => [scenario.name, scenario.id]))('%s permits one ready player', (_name, scenario) => {
+test.each(SCENARIOS.filter(scenario=>!['blitz-cooperation','mines-liberation','dungeon-lords','druid-nights','conquer-and-hold','one-to-return'].includes(scenario.id)).map(scenario => [scenario.name, scenario.id]))('%s permits one ready player', (_name, scenario) => {
   let lobby = createLobby('SOLO1234', host);
   lobby = updateLobby(lobby, { type: 'SET_SCENARIO', scenario });
   lobby = updateLobby(lobby, { type: 'SELECT_CHARACTER', playerId: host.id, character: 'tovak' });
@@ -91,4 +91,12 @@ test('One to Return requires two to four ready players', () => {
   expect(canStartLobby({ scenario: 'one-to-return', players: ready(1) })).toBe(false);
   expect(canStartLobby({ scenario: 'one-to-return', players: ready(2) })).toBe(true);
   expect(canStartLobby({ scenario: 'one-to-return', players: ready(4) })).toBe(true);
+});
+
+test('Conquer and Hold requires either two players or two teams of two', () => {
+  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `h${index}`, connected: true, character: `h${index}`, ready: true }));
+  expect(canStartLobby({ scenario: 'conquer-and-hold', players: ready(1) })).toBe(false);
+  expect(canStartLobby({ scenario: 'conquer-and-hold', players: ready(2) })).toBe(true);
+  expect(canStartLobby({ scenario: 'conquer-and-hold', players: ready(3) })).toBe(false);
+  expect(canStartLobby({ scenario: 'conquer-and-hold', players: ready(4) })).toBe(true);
 });
