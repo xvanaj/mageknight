@@ -57,6 +57,27 @@ test.each(TACTICS.day)('a solo host can play and finish a turn after choosing $n
   expect(shell).not.toHaveClass('not-my-turn');
 });
 
+test('the explicit Solo Conquest lobby option starts an active playable turn', async () => {
+  localStorage.clear();
+  sessionStorage.clear();
+  window.history.replaceState({}, '', '/');
+  render(<App />);
+
+  fireEvent.change(screen.getByPlaceholderText(/enter your name/i), { target: { value: 'Solo conqueror' } });
+  fireEvent.click(screen.getByRole('button', { name: /create game/i }));
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'solo-conquest' } });
+  fireEvent.click(screen.getByRole('button', { name: /tovak/i }));
+  fireEvent.click(screen.getByRole('button', { name: /i.m ready/i }));
+  fireEvent.click(screen.getByRole('button', { name: /start game/i }));
+
+  await screen.findByRole('heading', { name: /choose your tactic/i });
+  fireEvent.click(screen.getByRole('button', { name: /early bird/i }));
+  await screen.findByRole('heading', { name: /action phase/i });
+  expect(screen.getByTestId('game-shell')).not.toHaveClass('not-my-turn');
+  expect(screen.getByText(/cards remain/i)).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: /play sideways/i }).some(button => !button.disabled)).toBe(true);
+});
+
 test('discard choices cover only their own Deed card', () => {
   const panel = document.createElement('div');
   panel.innerHTML = '<div class="actions"><div class="card-choice discard-choice"></div></div><article class="deed"><div class="card-choice discard-choice"></div></article>';
