@@ -16,7 +16,7 @@ Primary references:
 | Deed cards, mana, Source, crystals | Implemented | Implemented | Covered | Individual printed effects remain under card-by-card regression coverage |
 | Movement, exploration, Day/Night terrain | Implemented | Implemented | Covered | Audit map-shape placement restrictions |
 | Sites and interaction | Implemented | Implemented | Covered | Recheck every Site Description card |
-| Enemy combat and abilities | Implemented | Implemented | Covered | Token-by-token audit remains |
+| Enemy combat and abilities | Implemented | Implemented | Covered | Complete: all 60 tokens, printed statistics, abilities, city modifiers, and summoned enemies are verified |
 | Units, recruitment, banners | Implemented | Implemented | Covered | Unit-by-unit audit remains |
 | Leveling and skills | Implemented | Implemented | Covered | All four original Heroes now use their verified competitive and solo Skill sets |
 | PvP | Implemented | Implemented | Covered | Full rulebook sequence audit remains |
@@ -33,7 +33,7 @@ Primary references:
 | Solo Conquest | Implemented through one-player Full Conquest | Final rule-by-rule audit |
 | Blitz Conquest | Implemented | Final rule-by-rule audit |
 | Full Cooperation | Implemented | Final rule-by-rule audit |
-| Blitz Cooperation | Implemented | Verify city levels follow reveal order during the final scenario audit |
+| Blitz Cooperation | Implemented | City levels and their mixed-color garrisons now follow reveal order |
 | Mines Liberation | Implemented | Final end-to-end and map-shape audit |
 | Dungeon Lords | Implemented | Final end-to-end and map-shape audit |
 | Druid Nights | Implemented | Final end-to-end and map-shape audit |
