@@ -78,6 +78,28 @@ test('the explicit Solo Conquest lobby option starts an active playable turn', a
   expect(screen.getAllByRole('button', { name: /play sideways/i }).some(button => !button.disabled)).toBe(true);
 });
 
+test('the map exposes zoom controls and inspectable site rules', async () => {
+  localStorage.clear();
+  sessionStorage.clear();
+  window.history.replaceState({}, '', '/');
+  render(<App />);
+
+  fireEvent.change(screen.getByPlaceholderText(/enter your name/i), { target: { value: 'Cartographer' } });
+  fireEvent.click(screen.getByRole('button', { name: /create game/i }));
+  fireEvent.click(screen.getByRole('button', { name: /tovak/i }));
+  fireEvent.click(screen.getByRole('button', { name: /i.m ready/i }));
+  fireEvent.click(screen.getByRole('button', { name: /start game/i }));
+
+  expect(await screen.findByRole('button', { name: /zoom map in/i })).toBeEnabled();
+  expect(screen.getByRole('button', { name: /zoom map out/i })).toBeEnabled();
+  expect(screen.getByRole('button', { name: /reset map view/i })).toBeEnabled();
+  const portalInfo=screen.getByRole('button', { name: /inspect portal/i });
+  fireEvent.click(portalInfo);
+  expect(screen.getByRole('tooltip')).toHaveTextContent(/safe starting space/i);
+  fireEvent.keyDown(portalInfo,{key:'Enter'});
+  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+});
+
 test('discard choices cover only their own Deed card', () => {
   const panel = document.createElement('div');
   panel.innerHTML = '<div class="actions"><div class="card-choice discard-choice"></div></div><article class="deed"><div class="card-choice discard-choice"></div></article>';
