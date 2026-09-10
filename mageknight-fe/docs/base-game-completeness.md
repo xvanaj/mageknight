@@ -1,49 +1,56 @@
-# Base game completeness audit
+# Original base-game completeness audit
 
-This file tracks implementation against the official Mage Knight rulebook and scenario book. A feature is complete only when its rules are represented in the engine, exposed in the UI, and covered by a behavioral test.
+This implementation targets the original *Mage Knight Board Game* and its eleven scenarios. Expansion heroes and content may remain in internal catalogs for isolated tests, but original scenarios expose only original components.
 
-Primary references:
+The audit uses the official rulebook, scenario book, walkthrough, component manifests, and printed card text. A row is complete only when the rule exists in the engine, has a usable UI path, and is covered by a behavioral or inventory test.
 
-- WizKids, *Mage Knight Ultimate Edition Rulebook and Scenario Book*, pages 1–24.
-- WizKids, *Mage Knight Game Walkthrough*.
-- Official FAQ plus rules clarifications where the rulebook or a card is ambiguous.
+## Rules coverage
 
-## Rules systems
-
-| Area | Engine | UI | Tests | Remaining audit |
-| --- | --- | --- | --- | --- |
-| Round setup, tactics, turn order, end-of-round announcement | Implemented | Implemented | Covered | Check every tie and final-turn interaction |
-| Deed cards, mana, Source, crystals | Implemented | Implemented | Covered | Individual printed effects remain under card-by-card regression coverage |
-| Movement, exploration, Day/Night terrain | Implemented | Implemented | Covered | Audit map-shape placement restrictions |
-| Sites and interaction | Implemented | Implemented | Covered | Recheck every Site Description card |
-| Enemy combat and abilities | Implemented | Implemented | Covered | Complete: all 60 tokens, printed statistics, abilities, city modifiers, and summoned enemies are verified |
-| Units, recruitment, banners | Implemented | Implemented | Covered | Unit-by-unit audit remains |
-| Leveling and skills | Implemented | Implemented | Covered | All four original Heroes now use their verified competitive and solo Skill sets |
-| PvP | Implemented | Implemented | Covered | Full rulebook sequence audit remains |
-| Cooperative city assault | Implemented | Implemented | Covered | Full rulebook sequence audit remains |
-| Undo to the last new-information boundary | Implemented | Implemented | Covered | Continue auditing information-reveal triggers |
-| Standard achievements and conquest scoring | Implemented | Implemented | Covered | Verify all ties and scenario overrides |
-
-## Base scenarios
-
-| Scenario | Status | Remaining work |
+| Rule area | Status | Verified behavior |
 | --- | --- | --- |
-| First Reconnaissance | Implemented | Complete: numbered countryside order, cards 1–16, delayed offers, regular Units, final turns, and scoring are covered |
-| Full Conquest | Implemented | Final rule-by-rule audit |
-| Solo Conquest | Implemented through one-player Full Conquest | Final rule-by-rule audit |
-| Blitz Conquest | Implemented | Final rule-by-rule audit |
-| Full Cooperation | Implemented | Final rule-by-rule audit |
-| Blitz Cooperation | Implemented | City levels and their mixed-color garrisons now follow reveal order |
-| Mines Liberation | Implemented | Final end-to-end and map-shape audit |
-| Dungeon Lords | Implemented | Final end-to-end and map-shape audit |
-| Druid Nights | Implemented | Final end-to-end and map-shape audit |
-| Conquer and Hold | Implemented | Verify the generated connected layout against every coordinate in the illustrated predefined map |
-| One to Return | Implemented | Final end-to-end and map-shape audit |
+| Setup and rounds | Complete | Scenario setup, Day/Night rounds, tactic selection and order, dummy player, end-of-round announcement, final turns, and round refresh |
+| Deed cards and mana | Complete | Basic, powered, and sideways cards; crystals and tokens; Source use, held-die timing, rerolls, and Day/Night gold and black restrictions |
+| Movement and map | Complete | Terrain costs, exploration, fixed tile orientation, open and wedge map shapes, countryside/core placement, fallback tiles, and rampager provocation |
+| Sites | Complete | Villages, monasteries, keeps, mage towers, mines, magical glades, ruins, dungeons, tombs, spawning grounds, cities, and scenario-specific sites |
+| Combat | Complete | Ranged/Siege, Block, damage assignment, resistances, fortification, multiple enemies, summons, poison, brutal, swift, elusive, assassinate, paralyze, cumbersome, and Arcane Immunity |
+| Interaction and Units | Complete | Reputation, influence, recruitment restrictions, command limits, Unit activation, wounds, healing, resistances, and banners |
+| Heroes and Skills | Complete | The original Tovak, Arythea, Goldyx, and Norowas decks and Skill sets, including competitive interactive Skills |
+| Advanced cards | Complete | All original Advanced Actions, Spells, and Artifacts have their printed supplies and executable effects |
+| Cooperative assaults | Complete | Suitability, consent, defender assignment, individual entry costs, Source timing, rampagers, sequential combats, shared failure, recovery, and city shields |
+| Player versus player | Complete | Entry, pre-turn effects, full and partial attendance, ranged and melee exchanges, fortification, damage, Artifact theft, withdrawal, Fame, and attended-turn cleanup |
+| Undo and hidden information | Complete | Turn reset is available until new information is revealed; private decks, hands, facedown sites, and unexplored map content remain redacted |
+| End of game and scoring | Complete | Standard achievements, ties, wound penalties, cities, competitive victory, solo and cooperative mission scoring, and scenario overrides |
 
-## Content inventory
+## Scenario coverage
 
-The implementation catalog exposes 31 Advanced Actions, 24 Spells, 21 Artifacts, 40 Unit cards, seven Hero definitions, 12 base Ruin tokens, 19 map tiles plus the portal, and all enemy-token categories. Original scenarios now use explicit numbered base-game manifests: 28 Advanced Actions, 20 Spells, 16 Artifacts, 20 Regular Units, 20 Elite Units, and the four original Heroes. The lobby offers only Tovak, Arythea, Goldyx, and Norowas and rejects stale or forged expansion-Hero selections. Expansion definitions remain in the internal catalog for their behavior tests but are excluded from original scenario supplies. First Reconnaissance further limits its Advanced Action deck to original cards 1–16.
+| Original scenario | Status | Scenario-specific verification |
+| --- | --- | --- |
+| First Reconnaissance | Complete | Training length, ordered countryside tiles, cards 1-16, regular Units, delayed offers, friendly capital, exploration Fame, and ending |
+| Full Conquest | Complete | Standard competitive setup, city levels, final turns, victory, and scoring |
+| Solo Conquest | Complete | Dummy timer, solo tactics, city objective, round limit, and mission scoring |
+| Blitz Conquest | Complete | Short round structure, Blitz bonuses, city objective, and scoring |
+| Full Cooperation | Complete | Team rules, joint city assaults, cooperative objective, dummy timer, and team scoring |
+| Blitz Cooperation | Complete | Blitz team setup, joint city assaults, city reveal order, objective, and team scoring |
+| Mines Liberation | Complete | Friendly red city, mine distribution, liberation battles, remote production, reputation, ending, and Greatest Liberator scoring |
+| Dungeon Lords | Complete | Blue city, regular tomb, secret entrances, replacement defenders, connected sites, objective, and crawler scoring |
+| Druid Nights | Complete | Glade layout, friendly green city, incantations, doubled Fame, summon disposal, and final-turn timing |
+| Conquer and Hold | Complete | Illustrated fixed map, tower defenders, team control, mage-tower mana, Elite Unit timing, ending, and control scoring |
+| One to Return | Complete | Portal closure, occupant elimination, portal PvP, waiting, ending, and winner selection |
 
-## Completion gate
+## Original component inventory
 
-Completion requires all rows above to be implemented and verified, every data-defined card/unit/enemy to have at least one behavior test, all official scenarios to complete end-to-end, a successful production build, and a clean comparison between the implementation inventory and the official component inventory.
+The original scenario manifests contain:
+
+- four Heroes with their 16-card starting decks and Skill tokens;
+- 28 Advanced Actions, 20 Spells, and 16 Artifacts;
+- 20 Regular and 20 Elite Unit cards with their physical supply counts;
+- all 60 original enemy tokens with printed statistics and abilities;
+- 12 base Ruin tokens;
+- 11 countryside tiles, 8 core tiles, and the portal tile;
+- the original city cards, tactics, site descriptions, scoring cards, and scenario definitions.
+
+Automated inventory tests reject duplicate physical identities, missing copies, incorrect original-scenario supplies, and expansion content leaking into the original lobby or decks.
+
+## Validation gate
+
+The completion gate is a clean production build plus the full automated test suite. The suite covers rules behavior, all eleven scenario configurations, original component inventories, multiplayer privacy, lobby restrictions, and representative application rendering. The current verified baseline is 520 passing tests in four suites and a successful optimized production build.
