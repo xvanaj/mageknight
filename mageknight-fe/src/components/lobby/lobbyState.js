@@ -7,9 +7,10 @@ export const CHARACTERS = [
 
 export const SCENARIOS = [
   { id: 'first-reconnaissance', name: 'First Reconnaissance', detail: 'Training mission: reveal the capital; cities cannot be entered or conquered.' },
-  { id: 'full-conquest', name: 'Full Conquest', detail: 'Six rounds; solo uses two cities, multiplayer uses one level-4 city per player.' },
+  { id: 'full-conquest', name: 'Full Conquest', detail: 'Six-round competitive conquest for two to four players, with one level-4 city per player.' },
+  { id: 'solo-conquest', name: 'Solo Conquest', detail: 'Six rounds for one player with a dummy timer and cities revealed at levels 5 and 8.' },
   { id: 'blitz-conquest', name: 'Blitz Conquest', detail: 'Four rounds, level-3 cities, bonus Fame and Reputation, plus larger offers.' },
-  { id: 'cooperative-conquest', name: 'Full Cooperation', detail: 'Solo Conquest for one, or the official cooperative setup for two or three players.' },
+  { id: 'cooperative-conquest', name: 'Full Cooperation', detail: 'Six-round cooperative conquest for two or three players with a dummy timer.' },
   { id: 'blitz-cooperation', name: 'Blitz Cooperation', detail: 'Four-round cooperative mission for two or three players with escalating cities and Blitz bonuses.' },
   { id: 'mines-liberation', name: 'Mines Liberation', detail: 'Four-round competitive mission: clear every mine and restore crystal production.' },
   { id: 'dungeon-lords', name: 'Dungeon Lords', detail: 'Five-round competitive mission with secret underground sites and tunnel travel.' },
@@ -57,7 +58,10 @@ export function updateLobby(lobby, action) {
 export const canStartLobby = lobby => {
   if(!lobby||lobby.players.length<1)return false;
   const count=lobby.players.length;
-  if(lobby.scenario==='cooperative-conquest'&&count>3)return false;
+  if(lobby.scenario==='full-conquest'&&(count<2||count>4))return false;
+  if(lobby.scenario==='solo-conquest'&&count!==1)return false;
+  if(lobby.scenario==='blitz-conquest'&&(count<2||count>4))return false;
+  if(lobby.scenario==='cooperative-conquest'&&(count<2||count>3))return false;
   if(lobby.scenario==='blitz-cooperation'&&(count<2||count>3))return false;
   if(lobby.scenario==='mines-liberation'&&(count<2||count>4))return false;
   if(lobby.scenario==='dungeon-lords'&&(count<2||count>4))return false;

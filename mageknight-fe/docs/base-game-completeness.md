@@ -2,13 +2,13 @@
 
 This implementation targets the original *Mage Knight Board Game* and its eleven scenarios. Expansion heroes and content may remain in internal catalogs for isolated tests, but original scenarios expose only original components.
 
-The audit uses the official rulebook, scenario book, walkthrough, component manifests, and printed card text. A row is complete only when the rule exists in the engine, has a usable UI path, and is covered by a behavioral or inventory test.
+The audit uses the official March 2012 rulebook, scenario book, walkthrough, component manifests, and printed card text. A row is complete only when the rule exists in the engine, has a usable UI path, and is covered by a behavioral or inventory test.
 
 ## Rules coverage
 
 | Rule area | Status | Verified behavior |
 | --- | --- | --- |
-| Setup and rounds | Complete | Scenario setup, Day/Night rounds, tactic selection and order, dummy player, end-of-round announcement, final turns, and round refresh |
+| Setup and rounds | Complete | Scenario setup, Day/Night rounds, tactic selection and order, the Dummy player's complete ten-Skill supply, solo player's nine-Skill supply, end-of-round announcement, final turns, and round refresh |
 | Deed cards and mana | Complete | Basic, powered, and sideways cards; crystals and tokens; Source use, held-die timing, rerolls, and Day/Night gold and black restrictions |
 | Movement and map | Complete | Terrain costs, exploration, fixed tile orientation, open and wedge map shapes, countryside/core placement, fallback tiles, and rampager provocation |
 | Sites | Complete | Villages, monasteries, keeps, mage towers, mines, magical glades, ruins, dungeons, tombs, spawning grounds, cities, and scenario-specific sites |
@@ -53,4 +53,4 @@ Automated inventory tests reject duplicate physical identities, missing copies, 
 
 ## Validation gate
 
-The completion gate is a clean production build plus the full automated test suite. The suite covers rules behavior, all eleven scenario configurations, original component inventories, multiplayer privacy, lobby restrictions, and representative application rendering. The current verified baseline is 520 passing tests in four suites and a successful optimized production build.
+The completion gate is a clean production build plus the full automated test suite. The suite covers rules behavior, all eleven scenario configurations, original component inventories, multiplayer privacy, lobby restrictions, and representative application rendering. The current verified baseline is 523 passing tests in four suites and a successful optimized production build.

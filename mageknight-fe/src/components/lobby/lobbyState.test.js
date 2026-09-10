@@ -3,6 +3,14 @@ import { canStartLobby, CHARACTERS, createLobby, guestLobbyAction, SCENARIOS, up
 const host = { id: 'host', name: 'Host' };
 const guest = { id: 'guest', name: 'Guest' };
 
+test('the lobby exposes all eleven original scenarios', () => {
+  expect(SCENARIOS.map(scenario => scenario.id)).toEqual([
+    'first-reconnaissance', 'full-conquest', 'solo-conquest', 'blitz-conquest',
+    'cooperative-conquest', 'blitz-cooperation', 'mines-liberation', 'dungeon-lords',
+    'druid-nights', 'conquer-and-hold', 'one-to-return',
+  ]);
+});
+
 test('a host can start a solo game after choosing a character and readying up', () => {
   let lobby = createLobby('ABCD1234', host);
   expect(canStartLobby(lobby)).toBe(false);
@@ -12,7 +20,7 @@ test('a host can start a solo game after choosing a character and readying up', 
   expect(updateLobby(lobby, { type: 'START' }).status).toBe('playing');
 });
 
-test.each(SCENARIOS.filter(scenario=>!['blitz-cooperation','mines-liberation','dungeon-lords','druid-nights','conquer-and-hold','one-to-return'].includes(scenario.id)).map(scenario => [scenario.name, scenario.id]))('%s permits one ready player', (_name, scenario) => {
+test.each(SCENARIOS.filter(scenario=>['first-reconnaissance','solo-conquest'].includes(scenario.id)).map(scenario => [scenario.name, scenario.id]))('%s permits one ready player', (_name, scenario) => {
   let lobby = createLobby('SOLO1234', host);
   lobby = updateLobby(lobby, { type: 'SET_SCENARIO', scenario });
   lobby = updateLobby(lobby, { type: 'SELECT_CHARACTER', playerId: host.id, character: 'tovak' });
@@ -63,6 +71,18 @@ test('official Full Cooperation setup rejects a fourth actual player', () => {
   const players = Array.from({ length: 4 }, (_, index) => ({ id: `p${index}`, connected: true, character: CHARACTERS[index].id, ready: true }));
   expect(canStartLobby({ scenario: 'cooperative-conquest', players })).toBe(false);
   expect(canStartLobby({ scenario: 'full-conquest', players })).toBe(true);
+});
+
+test('the three Conquest scenarios enforce their printed player counts', () => {
+  const ready = count => Array.from({ length: count }, (_, index) => ({ id: `c${index}`, connected: true, character: CHARACTERS[index].id, ready: true }));
+  expect(canStartLobby({ scenario: 'solo-conquest', players: ready(1) })).toBe(true);
+  expect(canStartLobby({ scenario: 'solo-conquest', players: ready(2) })).toBe(false);
+  expect(canStartLobby({ scenario: 'full-conquest', players: ready(1) })).toBe(false);
+  expect(canStartLobby({ scenario: 'full-conquest', players: ready(2) })).toBe(true);
+  expect(canStartLobby({ scenario: 'blitz-conquest', players: ready(1) })).toBe(false);
+  expect(canStartLobby({ scenario: 'blitz-conquest', players: ready(2) })).toBe(true);
+  expect(canStartLobby({ scenario: 'cooperative-conquest', players: ready(1) })).toBe(false);
+  expect(canStartLobby({ scenario: 'cooperative-conquest', players: ready(2) })).toBe(true);
 });
 
 test('Blitz Cooperation requires two or three ready players', () => {
