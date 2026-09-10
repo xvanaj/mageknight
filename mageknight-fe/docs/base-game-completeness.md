@@ -18,7 +18,7 @@ Primary references:
 | Sites and interaction | Implemented | Implemented | Covered | Recheck every Site Description card |
 | Enemy combat and abilities | Implemented | Implemented | Covered | Token-by-token audit remains |
 | Units, recruitment, banners | Implemented | Implemented | Covered | Unit-by-unit audit remains |
-| Leveling and skills | Implemented | Implemented | Covered | Skill-by-skill audit remains |
+| Leveling and skills | Implemented | Implemented | Covered | Tovak's original competitive/solo sets are verified; Arythea, Goldyx, and Norowas still require printed-effect audits |
 | PvP | Implemented | Implemented | Covered | Full rulebook sequence audit remains |
 | Cooperative city assault | Implemented | Implemented | Covered | Full rulebook sequence audit remains |
 | Undo to the last new-information boundary | Implemented | Implemented | Covered | Continue auditing information-reveal triggers |
