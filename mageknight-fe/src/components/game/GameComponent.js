@@ -191,7 +191,7 @@ function phaseName(p){return ({tactic:'Choose tactic','tactic-removal':'Retire t
 function GladeHealing({game,dispatch}){const choice=game.pendingGladeHealing;return <div className="actions"><p className="phase-help"><b>Healing Essence</b> — you may throw away one Wound from your hand or discard pile. This is separate from Heal and cannot heal Units.</p>{choice?.hand&&<button onClick={()=>dispatch({type:'RESOLVE_GLADE_HEALING',pile:'hand'})}>Throw away a hand Wound</button>}{choice?.discard&&<button onClick={()=>dispatch({type:'RESOLVE_GLADE_HEALING',pile:'discard'})}>Throw away a discarded Wound</button>}<button className="primary" onClick={()=>dispatch({type:'RESOLVE_GLADE_HEALING'})}>Decline Healing Essence</button></div>}
 
 function MapViewport({children}){
-  return <TransformWrapper initialScale={1} minScale={0.65} maxScale={3} centerOnInit centerZoomedOut limitToBounds={false} wheel={{step:.12}} pinch={{step:5}} panning={{velocityDisabled:true}} doubleClick={{mode:'zoomIn',step:.35}}>
+  return <TransformWrapper initialScale={1} minScale={0.65} maxScale={5} centerOnInit centerZoomedOut limitToBounds={false} wheel={{step:.12}} pinch={{step:5}} panning={{velocityDisabled:true}} doubleClick={{mode:'zoomIn',step:.35}}>
     {({zoomIn,zoomOut,resetTransform})=><>
       <div className="map-controls" aria-label="Map controls"><button type="button" aria-label="Zoom map in" title="Zoom in" onClick={()=>zoomIn()}>+</button><button type="button" aria-label="Zoom map out" title="Zoom out" onClick={()=>zoomOut()}>−</button><button type="button" className="map-reset" aria-label="Reset map view" title="Fit the whole map" onClick={()=>resetTransform()}>Fit</button></div>
       <div className="map-gesture-hint">Drag to move · scroll or pinch to zoom</div>
@@ -210,9 +210,9 @@ const displayTrait=trait=>trait.replaceAll('-',' ');
 
 function HexMap({game,moves,onHex,onCombat}){
   const [inspected,setInspected]=useState(null);
-  const size=40, ox=365, oy=215;
+  const size=40, hexRadius=38.25, ox=365, oy=215;
   const pos=h=>({x:ox+size*1.5*h.q,y:oy+size*Math.sqrt(3)*(h.r+h.q/2)});
-  const points=(x,y)=>Array.from({length:6},(_,i)=>{const a=Math.PI/180*(60*i);return `${x+size*Math.cos(a)},${y+size*Math.sin(a)}`}).join(' ');
+  const points=(x,y)=>Array.from({length:6},(_,i)=>{const a=Math.PI/180*(60*i);return `${x+hexRadius*Math.cos(a)},${y+hexRadius*Math.sin(a)}`}).join(' ');
   const positions=game.map.map(pos),minX=Math.min(...positions.map(item=>item.x))-size*1.4,maxX=Math.max(...positions.map(item=>item.x))+size*1.4,minY=Math.min(...positions.map(item=>item.y))-size*1.4,maxY=Math.max(...positions.map(item=>item.y))+size*1.4;
   const inspectedHex=game.map.find(h=>`${h.q},${h.r}`===inspected&&h.revealed!==false),tooltipEnemies=inspectedHex?visibleEnemies(inspectedHex,game):[],tooltipHeight=inspectedHex?72+tooltipEnemies.length*47:0;
   let tooltipPosition=null;
