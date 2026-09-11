@@ -1,4 +1,4 @@
-import { BASE_ADVANCED_ACTION_IDS, BASE_ARYTHEA_SKILLS, BASE_ARTIFACT_IDS, BASE_CONTENT_COUNTS, BASE_GOLDYX_SKILLS, BASE_NOROWAS_SKILLS, BASE_RUINS_TOKENS, BASE_SPELL_IDS, BASE_TOVAK_SKILLS, calculateScore, CHARACTER_PROFILES, CITY_GARRISONS, CONTENT_COUNTS, createGame, createMultiplayerGame, ENEMIES, gameViewForPlayer, legalExplorations, legalMoves, legalTunnelMoves, reduceGame, SCENARIO_TILE_COUNTS, TERRAIN_COST, SITES, TACTICS, TOVAK_SKILLS, unitArmor, unitKey, UNITS } from './gameEngine';
+import { BASE_ADVANCED_ACTION_IDS, BASE_ARYTHEA_SKILLS, BASE_ARTIFACT_IDS, BASE_CONTENT_COUNTS, BASE_GOLDYX_SKILLS, BASE_NOROWAS_SKILLS, BASE_RUINS_TOKENS, BASE_SPELL_IDS, BASE_TOVAK_SKILLS, calculateScore, CHARACTER_PROFILES, CITY_GARRISONS, CONTENT_COUNTS, createGame, createMultiplayerGame, ENEMIES, ENEMY_CATALOG, gameViewForPlayer, legalExplorations, legalMoves, legalTunnelMoves, reduceGame, SCENARIO_TILE_COUNTS, TERRAIN_COST, SITES, TACTICS, TOVAK_SKILLS, unitArmor, unitKey, UNITS } from './gameEngine';
 import { MAP_TILES, STARTING_TILES } from './gameContent';
 
 const act = (state, type, extra={}) => reduceGame(state,{type,...extra});
@@ -22,6 +22,7 @@ const unitForTest=(id,uid=`test-${id}`)=>({...JSON.parse(JSON.stringify(UNITS.fi
 const lobby=scenario=>({id:'SCENARIO',scenario,players:[{id:'p1',name:'One',character:'tovak'},{id:'p2',name:'Two',character:'arythea'}]});
 
 test('content decks expose every implemented card',()=>{expect(CONTENT_COUNTS).toEqual({advancedActions:31,spells:24,artifacts:21,units:40,characters:7});});
+test('monster compendium exposes every physical enemy type once',()=>{expect(ENEMY_CATALOG).toHaveLength(29);expect(new Set(ENEMY_CATALOG.map(enemy=>enemy.id)).size).toBe(29);expect(new Set(ENEMY_CATALOG.map(enemy=>enemy.category))).toEqual(new Set(['orc','grey','brown','violet','white','red']));});
 test('base-game card manifests match the original component inventory',()=>{expect(BASE_CONTENT_COUNTS).toEqual({advancedActions:28,spells:20,artifacts:16,units:40,characters:4});expect(new Set(BASE_ADVANCED_ACTION_IDS).size).toBe(28);expect(new Set(BASE_SPELL_IDS).size).toBe(20);expect(new Set(BASE_ARTIFACT_IDS).size).toBe(16);});
 test('all original Unit cards match their printed supply, statistics, sites, resistances, and powers',()=>{const expected={
   peasants:[3,1,4,3,'village','', 'attack:2,block:2,influence:2,move:2'],

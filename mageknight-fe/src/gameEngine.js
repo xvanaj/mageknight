@@ -189,6 +189,7 @@ const ENEMY_POOLS={
   white:['freezers','freezers','freezers','gunners','gunners','gunners','altemGuardsmen','altemGuardsmen','altemMages','altemMages'],
   red:['swampDragon','swampDragon','fireDragon','fireDragon','iceDragonBase','iceDragonBase','highDragonBase','highDragonBase'],
 };
+export const ENEMY_CATALOG=Object.entries(ENEMY_POOLS).flatMap(([category,ids])=>ids.map(id=>({...ENEMIES[id],traits:[...(ENEMIES[id].traits||[])],attacks:ENEMIES[id].attacks?.map(attack=>({...attack})),category}))).filter((enemy,index,all)=>all.findIndex(item=>item.id===enemy.id)===index);
 
 export const CITY_GARRISONS={
   blue:{

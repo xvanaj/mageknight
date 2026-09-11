@@ -102,6 +102,14 @@ test('the map exposes zoom controls and inspectable site rules', async () => {
   expect(screen.getByText(/hidden by first reconnaissance rules until a Mage Tower is revealed/i)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /zoom map out/i })).toBeEnabled();
   expect(screen.getByRole('button', { name: /reset map view/i })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: /^monsters$/i }));
+  expect(screen.getByRole('dialog', { name: /monster compendium/i })).toHaveTextContent(/all 29 enemy types/i);
+  expect(screen.getByRole('heading', { name: /abilities and combat symbols/i })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /^diggers$/i })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', { name: /search monsters and abilities/i }), { target: { value: 'paralyze' } });
+  expect(screen.getByRole('heading', { name: /^swamp dragon$/i })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: /^diggers$/i })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /close monster compendium/i }));
   const portalInfo=screen.getByRole('button', { name: /inspect portal/i });
   fireEvent.click(portalInfo);
   expect(screen.getByRole('tooltip')).toHaveTextContent(/safe starting space/i);
