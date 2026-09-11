@@ -128,3 +128,17 @@ test('discard choices cover only their own Deed card', () => {
     panel.remove();
   }
 });
+
+test('primary game controls and cards keep the comfortable reading scale', () => {
+  const panel = document.createElement('div');
+  panel.innerHTML = '<div class="actions"><button>Move</button></div><article class="deed"><button><span>Basic</span><b>Move 2</b></button></article><article class="offer-row"><small>Offer details</small></article>';
+  document.body.appendChild(panel);
+  try {
+    expect(parseFloat(getComputedStyle(panel.querySelector('.actions button')).fontSize)).toBeGreaterThanOrEqual(13);
+    expect(parseFloat(getComputedStyle(panel.querySelector('.deed')).width)).toBeGreaterThanOrEqual(218);
+    expect(parseFloat(getComputedStyle(panel.querySelector('.deed button b')).fontSize)).toBeGreaterThanOrEqual(12);
+    expect(parseFloat(getComputedStyle(panel.querySelector('.offer-row small')).fontSize)).toBeGreaterThanOrEqual(10);
+  } finally {
+    panel.remove();
+  }
+});
