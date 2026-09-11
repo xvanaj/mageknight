@@ -1009,7 +1009,7 @@ export function reduceGame(input, action) {
       if(die.claimedBy)return fail(state,'That Source die is claimed until the end of the round.');
       if (die.color === 'black' && effectiveTime(state) === 'day'&&!state.bonuses.blackAsBasic&&!state.bonuses.blackManaUsable) return fail(state, 'Black mana cannot be used during the Day.');
       if (die.color === 'gold' && effectiveTime(state) === 'night'&&!state.bonuses.goldAsBasic) return fail(state, 'Gold mana cannot be used during the Night.');
-      lockUndo(state,'A Source die was taken.');state.mana.push(die.color);if(state.sourceTaken||frozen)state.bonuses.extraSourceUses--;else state.sourceTaken=true;state.player.heldSourceDice=state.player.heldSourceDice||[];state.player.heldSourceDice.push(state.source.splice(dieIndex,1)[0]);state.player.atTurnStart=false;
+      state.mana.push(die.color);if(state.sourceTaken||frozen)state.bonuses.extraSourceUses--;else state.sourceTaken=true;state.player.heldSourceDice=state.player.heldSourceDice||[];state.player.heldSourceDice.push(state.source.splice(dieIndex,1)[0]);state.player.atTurnStart=false;
       log(state,`Took ${state.mana[state.mana.length-1]} mana and kept the Source die until the end of the turn.`);return state;
     }
     case 'PLAY_CARD': {
