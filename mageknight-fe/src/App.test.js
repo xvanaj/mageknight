@@ -91,6 +91,10 @@ test('the map exposes zoom controls and inspectable site rules', async () => {
   fireEvent.click(screen.getByRole('button', { name: /start game/i }));
 
   expect(await screen.findByRole('button', { name: /zoom map in/i })).toBeEnabled();
+  expect(screen.getByRole('heading', { name: /market offers/i })).toBeInTheDocument();
+  expect(screen.getByText(/advanced actions/i, { selector: 'summary' })).toBeInTheDocument();
+  expect(screen.getByText(/^spells/i, { selector: 'summary' })).toBeInTheDocument();
+  expect(screen.getByText(/^units/i, { selector: 'summary' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /zoom map out/i })).toBeEnabled();
   expect(screen.getByRole('button', { name: /reset map view/i })).toBeEnabled();
   const portalInfo=screen.getByRole('button', { name: /inspect portal/i });
