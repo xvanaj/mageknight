@@ -6,7 +6,7 @@ export const CHARACTERS = [
 ];
 
 export const SCENARIOS = [
-  { id: 'first-reconnaissance', name: 'First Reconnaissance', detail: 'Training mission: reveal the capital; cities cannot be entered or conquered.' },
+  { id: 'first-reconnaissance', name: 'First Reconnaissance', detail: 'Training mission: reveal the capital; cities cannot be entered or conquered. Spell and Advanced Action offers start hidden and appear when first needed.' },
   { id: 'full-conquest', name: 'Full Conquest', detail: 'Six-round competitive conquest for two to four players, with one level-4 city per player.' },
   { id: 'solo-conquest', name: 'Solo Conquest', detail: 'Six rounds for one player with a dummy timer and cities revealed at levels 5 and 8.' },
   { id: 'blitz-conquest', name: 'Blitz Conquest', detail: 'Four rounds, level-3 cities, bonus Fame and Reputation, plus larger offers.' },

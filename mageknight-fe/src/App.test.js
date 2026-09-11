@@ -75,6 +75,9 @@ test('the explicit Solo Conquest lobby option starts an active playable turn', a
   await screen.findByRole('heading', { name: /action phase/i });
   expect(screen.getByTestId('game-shell')).not.toHaveClass('not-my-turn');
   expect(screen.getByText(/cards remain/i)).toBeInTheDocument();
+  expect(screen.getByText(/advanced actions/i,{selector:'summary'})).toHaveTextContent('3');
+  expect(screen.getByText(/^spells/i,{selector:'summary'})).toHaveTextContent('3');
+  expect(screen.getByText(/^units/i,{selector:'summary'})).toHaveTextContent('3');
   expect(screen.getAllByRole('button', { name: /play sideways/i }).some(button => !button.disabled)).toBe(true);
 });
 
@@ -95,6 +98,8 @@ test('the map exposes zoom controls and inspectable site rules', async () => {
   expect(screen.getByText(/advanced actions/i, { selector: 'summary' })).toBeInTheDocument();
   expect(screen.getByText(/^spells/i, { selector: 'summary' })).toBeInTheDocument();
   expect(screen.getByText(/^units/i, { selector: 'summary' })).toBeInTheDocument();
+  expect(screen.getByText(/hidden by first reconnaissance rules until a Hero first reaches a Skill level/i)).toBeInTheDocument();
+  expect(screen.getByText(/hidden by first reconnaissance rules until a Mage Tower is revealed/i)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /zoom map out/i })).toBeEnabled();
   expect(screen.getByRole('button', { name: /reset map view/i })).toBeEnabled();
   const portalInfo=screen.getByRole('button', { name: /inspect portal/i });
